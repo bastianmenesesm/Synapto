@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Synapto</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0d1a; color: #f0f0ff;
+      font-family: system-ui, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; flex-direction: column; gap: 24px; padding: 24px;
+    }
+    h1 {
+      font-size: 56px; font-weight: 900;
+      background: linear-gradient(90deg, #7c5cfc, #4ecdc4);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    p { color: rgba(240,240,255,.5); font-size: 18px; }
+    .links { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    a {
+      padding: 14px 28px; border-radius: 12px; font-size: 16px; font-weight: 600;
+      text-decoration: none; transition: opacity .15s;
+    }
+    a:hover { opacity: .85; }
+    .a-admin { background: #7c5cfc; color: #fff; }
+    .a-player { background: #161628; border: 1px solid rgba(255,255,255,.1); color: #f0f0ff; }
+  </style>
+</head>
+<body>
+  <h1>Synapto</h1>
+  <p>Quizzes en tiempo real para tu equipo</p>
+  <div class="links">
+    <a href="/admin/" class="a-admin">Panel admin →</a>
+    <a href="/player/" class="a-player">Unirse a un juego</a>
+  </div>
+</body>
+</html>

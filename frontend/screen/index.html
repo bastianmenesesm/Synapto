@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Synapto — Pantalla</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d1a;
+      --surface: #161628;
+      --border: rgba(255,255,255,0.08);
+      --accent: #7c5cfc;
+      --accent2: #4ecdc4;
+      --text: #f0f0ff;
+      --muted: rgba(240,240,255,0.5);
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; overflow: hidden; }
+    body { display: flex; flex-direction: column; }
+
+    /* Header */
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .header h1 { font-size: 20px; font-weight: 800; background: linear-gradient(90deg, #7c5cfc, #4ecdc4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .timer-ring { width: 64px; height: 64px; position: relative; }
+    .timer-ring svg { transform: rotate(-90deg); }
+    .timer-ring .bg { fill: none; stroke: var(--surface); stroke-width: 5; }
+    .timer-ring .fg { fill: none; stroke: var(--accent2); stroke-width: 5; stroke-dasharray: 163; stroke-dashoffset: 0; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke .3s; }
+    .timer-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; }
+
+    /* Content */
+    .content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; }
+    .hidden { display: none !important; }
+
+    /* Lobby */
+    .lobby-code { font-size: 96px; font-weight: 900; letter-spacing: 16px; color: var(--accent2); line-height: 1; }
+    .lobby-sub { font-size: 20px; color: var(--muted); margin-top: 8px; margin-bottom: 32px; text-align: center; }
+    .qr-block { background: #fff; border-radius: 16px; padding: 16px; }
+    .qr-block img { display: block; width: 240px; height: 240px; }
+    .player-bubbles { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 28px; max-width: 800px; }
+    .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 18px; font-size: 16px; animation: popIn .3s ease; }
+    @keyframes popIn { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+
+    /* Question */
+    .q-progress { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+    .q-text-big { font-size: 36px; font-weight: 700; text-align: center; max-width: 900px; line-height: 1.3; margin-bottom: 40px; }
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; max-width: 900px; }
+    .opt-card { border-radius: 14px; padding: 20px 24px; display: flex; align-items: center; gap: 14px; font-size: 20px; font-weight: 600; transition: opacity .3s, transform .2s; }
+    .opt-card .lbl { font-size: 28px; font-weight: 900; min-width: 36px; }
+    .opt-0 { background: #e0555522; border: 2px solid #e05555; }
+    .opt-1 { background: #2b9e9a22; border: 2px solid #2b9e9a; }
+    .opt-2 { background: #c9a22722; border: 2px solid #c9a227; }
+    .opt-3 { background: #3a9e5e22; border: 2px solid #3a9e5e; }
+    .opt-correct { transform: scale(1.03); box-shadow: 0 0 0 4px #fff; }
+    .opt-wrong { opacity: .25; }
+
+    /* Ranking */
+    .rank-title { font-size: 24px; font-weight: 700; margin-bottom: 24px; text-align: center; }
+    .rank-list { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 12px; }
+    .rank-item { display: flex; align-items: center; gap: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; animation: slideIn .4s ease; }
+    @keyframes slideIn { from{transform:translateX(-20px);opacity:0} to{transform:translateX(0);opacity:1} }
+    .rank-pos { font-size: 28px; min-width: 40px; }
+    .rank-name { flex: 1; font-size: 20px; font-weight: 600; }
+    .rank-pts { font-size: 22px; font-weight: 800; color: var(--accent2); }
+    .rank-bar-wrap { width: 100%; height: 4px; background: rgba(255,255,255,.08); border-radius: 2px; margin-top: 6px; }
+    .rank-bar { height: 4px; background: var(--accent2); border-radius: 2px; transition: width .6s ease; }
+
+    /* Tally bars */
+    .tally { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 900px; margin-top: 16px; }
+    .tally-item { border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+    .tally-bar { flex: 1; height: 10px; background: rgba(255,255,255,.15); border-radius: 5px; overflow: hidden; }
+    .tally-fill { height: 100%; border-radius: 5px; transition: width .6s ease; }
+    .t0 .tally-fill { background: #e05555; }
+    .t1 .tally-fill { background: #2b9e9a; }
+    .t2 .tally-fill { background: #c9a227; }
+    .t3 .tally-fill { background: #3a9e5e; }
+    .tally-count { font-weight: 700; font-size: 18px; min-width: 28px; text-align: right; }
+  </style>
+</head>
+<body>
+<div class="header">
+  <h1>Synapto</h1>
+  <div id="q-counter-header" style="font-size:14px;color:var(--muted)"></div>
+  <div class="timer-ring" id="timer-ring" style="visibility:hidden">
+    <svg width="64" height="64" viewBox="0 0 64 64">
+      <circle class="bg" cx="32" cy="32" r="26"/>
+      <circle class="fg" id="timer-fg" cx="32" cy="32" r="26"/>
+    </svg>
+    <div class="timer-num" id="timer-num">-</div>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- Lobby -->
+  <div id="s-lobby">
+    <div style="text-align:center">
+      <p class="lobby-sub">Escaneá el QR o ingresá el código</p>
+      <div id="qr-block" class="qr-block" style="margin:0 auto 16px"></div>
+      <div class="lobby-code" id="lobby-code">------</div>
+      <p style="font-size:16px;color:var(--muted);margin-top:8px" id="lobby-url"></p>
+    </div>
+    <div class="player-bubbles" id="player-bubbles"></div>
+  </div>
+
+  <!-- Question -->
+  <div id="s-question" class="hidden" style="width:100%;display:flex;flex-direction:column;align-items:center">
+    <p class="q-progress" id="q-progress"></p>
+    <p class="q-text-big" id="q-text-big"></p>
+    <div class="options-grid" id="options-grid"></div>
+  </div>
+
+  <!-- Reveal -->
+  <div id="s-reveal" class="hidden" style="width:100%;display:flex;flex-direction:column;align-items:center">
+    <p class="q-text-big" id="reveal-q-text" style="font-size:24px;margin-bottom:24px"></p>
+    <div class="options-grid" id="reveal-options-grid"></div>
+    <div class="tally" id="tally-grid"></div>
+    <div class="rank-list" style="margin-top:32px" id="reveal-ranking"></div>
+  </div>
+
+  <!-- Final -->
+  <div id="s-final" class="hidden" style="width:100%;display:flex;flex-direction:column;align-items:center">
+    <p class="rank-title">🏆 Resultados finales</p>
+    <div class="rank-list" id="final-ranking"></div>
+  </div>
+
+</div>
+
+<script>
+const API = (window.SYNAPTO_BACKEND_URL || 'http://localhost:4000');
+const code = new URLSearchParams(window.location.search).get('code');
+let currentQ = null;
+let timerLimit = 20;
+
+function show(id) {
+  ['s-lobby','s-question','s-reveal','s-final'].forEach(s =>
+    document.getElementById(s).classList.add('hidden')
+  );
+  document.getElementById(id).classList.remove('hidden');
+}
+
+if (!code) {
+  document.querySelector('.content').innerHTML = '<p style="color:rgba(255,255,255,.4);font-size:24px">Sin código de sala. Abrí desde el panel admin.</p>';
+} else {
+  const socket = io(API);
+  socket.emit('screen:join', { code });
+
+  socket.on('screen:state', ({ joinUrl, players }) => {
+    document.getElementById('lobby-code').textContent = code;
+    document.getElementById('lobby-url').textContent = joinUrl || '';
+    updatePlayers(players);
+    fetch(API + '/api/games/' + code).then(r=>r.json()).then(g=>{
+      if (g.qr) { /* already rendered */ }
+    });
+  });
+
+  // Get QR from parent API
+  fetch(API + '/api/games/' + code).then(r=>r.json()).catch(()=>({}));
+
+  socket.on('lobby:update', ({ players }) => updatePlayers(players));
+
+  socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
+    timerLimit = timeLimit;
+    currentQ = { text, options };
+    document.getElementById('q-progress').textContent = `Pregunta ${index + 1} de ${total}`;
+    document.getElementById('q-text-big').textContent = text;
+
+    const letters = ['A','B','C','D'];
+    const cols = ['opt-0','opt-1','opt-2','opt-3'];
+    document.getElementById('options-grid').innerHTML = options.map((opt, i) => `
+      <div class="opt-card ${cols[i]}" id="opt-${i}">
+        <span class="lbl">${letters[i]}</span>
+        <span>${opt}</span>
+      </div>
+    `).join('');
+
+    setTimer(timeLimit);
+    document.getElementById('timer-ring').style.visibility = 'visible';
+    document.getElementById('q-counter-header').textContent = `P ${index + 1}/${total}`;
+    show('s-question');
+  });
+
+  socket.on('timer:tick', ({ timeLeft }) => {
+    setTimerDisplay(timeLeft);
+  });
+
+  socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
+    document.getElementById('timer-ring').style.visibility = 'hidden';
+    const letters = ['A','B','C','D'];
+    const cols = ['opt-0','opt-1','opt-2','opt-3'];
+    const total = tally.reduce((a,b)=>a+b,0) || 1;
+
+    if (currentQ) {
+      document.getElementById('reveal-q-text').textContent = currentQ.text;
+      document.getElementById('reveal-options-grid').innerHTML = currentQ.options.map((opt, i) => `
+        <div class="opt-card ${cols[i]} ${i === correctIndex ? 'opt-correct' : 'opt-wrong'}">
+          <span class="lbl">${i === correctIndex ? '✓' : letters[i]}</span>
+          <span>${opt}</span>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('tally-grid').innerHTML = tally.map((count, i) => `
+      <div class="tally-item t${i} ${cols[i]}" style="background:${['#e0555515','#2b9e9a15','#c9a22715','#3a9e5e15'][i]}">
+        <span>${letters[i]}</span>
+        <div class="tally-bar"><div class="tally-fill" style="width:${Math.round(count/total*100)}%"></div></div>
+        <span class="tally-count">${count}</span>
+      </div>
+    `).join('');
+
+    const medals = ['🥇','🥈','🥉'];
+    const maxScore = ranking[0]?.score || 1;
+    document.getElementById('reveal-ranking').innerHTML = ranking.map((p, i) => `
+      <div class="rank-item" style="animation-delay:${i*0.1}s">
+        <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between">
+            <span class="rank-name">${p.name}</span>
+            <span class="rank-pts">${p.score.toLocaleString()}</span>
+          </div>
+          <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
+        </div>
+      </div>
+    `).join('');
+
+    show('s-reveal');
+  });
+
+  socket.on('game:finished', ({ ranking }) => {
+    document.getElementById('timer-ring').style.visibility = 'hidden';
+    const medals = ['🥇','🥈','🥉'];
+    const maxScore = ranking[0]?.score || 1;
+    document.getElementById('final-ranking').innerHTML = ranking.map((p, i) => `
+      <div class="rank-item" style="animation-delay:${i*0.12}s">
+        <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between">
+            <span class="rank-name">${p.name}</span>
+            <span class="rank-pts">${p.score.toLocaleString()}</span>
+          </div>
+          <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
+        </div>
+      </div>
+    `).join('');
+    show('s-final');
+  });
+}
+
+function updatePlayers(players) {
+  document.getElementById('player-bubbles').innerHTML = players.map(p =>
+    `<div class="bubble">${p.name}</div>`
+  ).join('');
+}
+
+function setTimer(seconds) {
+  setTimerDisplay(seconds);
+}
+
+function setTimerDisplay(t) {
+  document.getElementById('timer-num').textContent = t;
+  const circumference = 163;
+  const offset = circumference - (t / timerLimit) * circumference;
+  const fg = document.getElementById('timer-fg');
+  fg.style.strokeDashoffset = offset;
+  if (t <= 5) fg.style.stroke = '#e05555';
+  else fg.style.stroke = 'var(--accent2)';
+}
+</script>
+</body>
+</html>

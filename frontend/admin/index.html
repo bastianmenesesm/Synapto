@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Synapto — Admin</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d1a;
+      --surface: #161628;
+      --surface2: #1e1e38;
+      --border: rgba(255,255,255,0.08);
+      --accent: #7c5cfc;
+      --accent2: #4ecdc4;
+      --danger: #ff6b6b;
+      --success: #51cf66;
+      --text: #f0f0ff;
+      --muted: rgba(240,240,255,0.45);
+      --radius: 12px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+    a { color: var(--accent2); text-decoration: none; }
+
+    /* Layout */
+    .shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; display: flex; flex-direction: column; }
+    .main { padding: 32px; overflow-y: auto; }
+
+    /* Logo */
+    .logo { padding: 0 24px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .logo h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .logo span { font-size: 12px; color: var(--muted); display: block; margin-top: 2px; }
+
+    /* Nav */
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 24px; font-size: 14px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; transition: all .15s; }
+    .nav-item:hover, .nav-item.active { color: var(--text); background: var(--surface2); border-left-color: var(--accent); }
+    .nav-icon { width: 18px; height: 18px; }
+
+    /* Header */
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+    .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #6a4de8; }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { opacity: .85; }
+
+    /* Cards */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .quiz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .quiz-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 12px; transition: border-color .15s; }
+    .quiz-card:hover { border-color: var(--accent); }
+    .quiz-card h3 { font-size: 16px; font-weight: 600; }
+    .quiz-card .meta { font-size: 13px; color: var(--muted); }
+    .quiz-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+    /* Forms */
+    .form-section { display: flex; flex-direction: column; gap: 20px; max-width: 720px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 13px; color: var(--muted); font-weight: 500; }
+    input[type="text"], input[type="number"], textarea, select {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 10px 14px; font-size: 14px; width: 100%;
+      outline: none; transition: border-color .15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* Question builder */
+    .questions-list { display: flex; flex-direction: column; gap: 16px; }
+    .q-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .q-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .q-num { font-size: 12px; color: var(--accent); font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .option-row { display: flex; align-items: center; gap: 8px; }
+    .option-dot { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; border: 2px solid transparent; }
+    .dot-0 { background: #ff6b6b22; color: #ff6b6b; border-color: #ff6b6b44; }
+    .dot-1 { background: #4ecdc422; color: #4ecdc4; border-color: #4ecdc444; }
+    .dot-2 { background: #ffd93d22; color: #ffd93d; border-color: #ffd93d44; }
+    .dot-3 { background: #6bcb7722; color: #6bcb77; border-color: #6bcb7744; }
+    .option-dot.correct { border-width: 2px; box-shadow: 0 0 0 2px currentColor; }
+    .option-input { flex: 1; }
+
+    /* Game modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: 460px; max-width: 95vw; }
+    .modal h2 { font-size: 20px; margin-bottom: 20px; }
+    .qr-wrap { background: #fff; border-radius: 12px; padding: 16px; display: inline-block; margin: 0 auto 16px; }
+    .qr-wrap img { display: block; width: 200px; height: 200px; }
+    .game-code { font-size: 40px; font-weight: 800; letter-spacing: 8px; text-align: center; color: var(--accent2); margin-bottom: 8px; }
+    .join-url { font-size: 12px; color: var(--muted); text-align: center; word-break: break-all; margin-bottom: 20px; }
+    .player-lobby { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; min-height: 40px; }
+    .player-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 13px; }
+
+    /* Game controls */
+    .game-ctrl { display: flex; gap: 12px; margin-top: 8px; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .status-lobby { background: #7c5cfc22; color: var(--accent); }
+    .status-live { background: #ff6b6b22; color: var(--danger); }
+    .status-done { background: #51cf6622; color: var(--success); }
+    .dot-pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* Views */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 20px; font-size: 14px; z-index: 999; opacity: 0; transform: translateY(8px); transition: all .2s; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <h1>Synapto</h1>
+      <span>Panel de administración</span>
+    </div>
+    <nav>
+      <div class="nav-item active" onclick="showView('quizzes')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Mis quizzes
+      </div>
+      <div class="nav-item" onclick="showView('create')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Nuevo quiz
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Quiz list -->
+    <div id="view-quizzes" class="view active">
+      <div class="page-header">
+        <h2 class="page-title">Mis quizzes</h2>
+        <button class="btn btn-primary" onclick="showView('create')">+ Nuevo quiz</button>
+      </div>
+      <div id="quiz-grid" class="quiz-grid">
+        <div class="empty">
+          <div class="empty-icon">🎯</div>
+          <p>Todavía no tenés quizzes.<br>¡Creá el primero!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create / Edit quiz -->
+    <div id="view-create" class="view">
+      <div class="page-header">
+        <h2 class="page-title" id="form-title">Nuevo quiz</h2>
+        <button class="btn btn-ghost" onclick="showView('quizzes')">← Volver</button>
+      </div>
+      <div class="form-section">
+        <input type="hidden" id="edit-id"/>
+        <div class="form-group">
+          <label>Nombre del quiz</label>
+          <input type="text" id="quiz-title" placeholder="Ej: Trivia de historia universal"/>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <label>Preguntas</label>
+            <button class="btn btn-ghost btn-sm" onclick="addQuestion()">+ Agregar pregunta</button>
+          </div>
+          <div id="questions-list" class="questions-list"></div>
+        </div>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-primary" onclick="saveQuiz()">Guardar quiz</button>
+          <button class="btn btn-ghost" onclick="showView('quizzes')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game view -->
+    <div id="view-game" class="view">
+      <div class="page-header">
+        <h2 class="page-title" id="game-quiz-title">Partida en curso</h2>
+        <div style="display:flex;gap:10px;align-items:center">
+          <span id="game-status-badge" class="status-badge status-lobby"><span class="dot-pulse"></span> Lobby</span>
+          <button class="btn btn-ghost" onclick="showView('quizzes')">← Salir</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <!-- QR + code -->
+        <div class="card" style="text-align:center">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Jugadores escanean para unirse</p>
+          <div class="qr-wrap">
+            <img id="game-qr" src="" alt="QR"/>
+          </div>
+          <div class="game-code" id="game-code">------</div>
+          <div class="join-url" id="game-join-url"></div>
+          <a id="screen-link" href="#" target="_blank" class="btn btn-ghost btn-sm" style="margin:0 auto;display:inline-flex">🖥️ Abrir pantalla</a>
+        </div>
+
+        <!-- Players + controls -->
+        <div class="card">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Jugadores conectados (<span id="player-count">0</span>)</p>
+          <div id="player-lobby" class="player-lobby"></div>
+          <hr style="border-color:var(--border);margin:16px 0"/>
+          <div id="game-q-info" style="font-size:14px;color:var(--muted);margin-bottom:12px">Pregunta 0 de 0</div>
+          <div class="game-ctrl">
+            <button class="btn btn-success" id="btn-next" onclick="adminNext()">▶ Iniciar juego</button>
+            <button class="btn btn-ghost" id="btn-reveal" onclick="adminReveal()" style="display:none">⏭ Revelar</button>
+          </div>
+          <div id="ranking-preview" style="margin-top:16px"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = (window.SYNAPTO_BACKEND_URL || 'http://localhost:4000') + '/api';
+let socket = null;
+let currentGame = null;
+let questionCount = 0;
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (name === 'quizzes') { loadQuizzes(); document.querySelectorAll('.nav-item')[0].classList.add('active'); }
+  if (name === 'create') { document.querySelectorAll('.nav-item')[1].classList.add('active'); }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, err = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderColor = err ? 'var(--danger)' : 'var(--success)';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Load quizzes ────────────────────────────────────────────────────────────
+async function loadQuizzes() {
+  const res = await fetch(API + '/quizzes');
+  const quizzes = await res.json();
+  const grid = document.getElementById('quiz-grid');
+  if (!quizzes.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">🎯</div><p>Todavía no tenés quizzes.<br>¡Creá el primero!</p></div>';
+    return;
+  }
+  grid.innerHTML = quizzes.map(q => `
+    <div class="quiz-card">
+      <h3>${q.title}</h3>
+      <div class="meta">Creado el ${new Date(q.created_at).toLocaleDateString('es-AR')}</div>
+      <div class="quiz-actions">
+        <button class="btn btn-primary btn-sm" onclick="startGame('${q.id}','${q.title}')">▶ Jugar</button>
+        <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Create/Edit quiz ────────────────────────────────────────────────────────
+function addQuestion(data = null) {
+  const list = document.getElementById('questions-list');
+  const idx = list.children.length;
+  const labels = ['A', 'B', 'C', 'D'];
+  const colors = ['dot-0','dot-1','dot-2','dot-3'];
+  const div = document.createElement('div');
+  div.className = 'q-card';
+  div.dataset.idx = idx;
+  div.innerHTML = `
+    <div class="q-card-header">
+      <span class="q-num">Pregunta ${idx + 1}</span>
+      <button class="btn btn-danger btn-sm" onclick="removeQuestion(this)">Eliminar</button>
+    </div>
+    <div class="form-group">
+      <label>Enunciado</label>
+      <textarea placeholder="¿Cuál es la capital de Francia?" class="q-text">${data ? data.text : ''}</textarea>
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <label>Tiempo límite (segundos)</label>
+      <input type="number" class="q-time" value="${data ? data.timeLimit : 20}" min="5" max="120" style="max-width:120px"/>
+    </div>
+    <div class="options-grid">
+      ${labels.map((lbl, i) => `
+        <div class="option-row">
+          <div class="option-dot ${colors[i]} ${data && data.correctIndex === i ? 'correct' : ''}" onclick="setCorrect(this, ${i})" title="Marcar como correcta">${lbl}</div>
+          <input type="text" class="option-input q-option" placeholder="Opción ${lbl}" value="${data ? (data.options[i] || '') : ''}"/>
+        </div>
+      `).join('')}
+    </div>
+    <input type="hidden" class="q-correct" value="${data ? data.correctIndex : 0}"/>
+  `;
+  list.appendChild(div);
+}
+
+function setCorrect(el, idx) {
+  const card = el.closest('.q-card');
+  card.querySelectorAll('.option-dot').forEach(d => d.classList.remove('correct'));
+  el.classList.add('correct');
+  card.querySelector('.q-correct').value = idx;
+}
+
+function removeQuestion(btn) {
+  btn.closest('.q-card').remove();
+  renumberQuestions();
+}
+
+function renumberQuestions() {
+  document.querySelectorAll('.q-card').forEach((c, i) => {
+    c.querySelector('.q-num').textContent = `Pregunta ${i + 1}`;
+  });
+}
+
+async function saveQuiz() {
+  const title = document.getElementById('quiz-title').value.trim();
+  const editId = document.getElementById('edit-id').value;
+  if (!title) { toast('Agregá un título al quiz', true); return; }
+
+  const cards = document.querySelectorAll('.q-card');
+  if (!cards.length) { toast('Agregá al menos una pregunta', true); return; }
+
+  const questions = [];
+  let valid = true;
+  cards.forEach(card => {
+    const text = card.querySelector('.q-text').value.trim();
+    const timeLimit = parseInt(card.querySelector('.q-time').value) || 20;
+    const options = [...card.querySelectorAll('.q-option')].map(i => i.value.trim());
+    const correctIndex = parseInt(card.querySelector('.q-correct').value);
+    if (!text || options.some(o => !o)) { valid = false; return; }
+    questions.push({ text, options, correctIndex, timeLimit });
+  });
+
+  if (!valid) { toast('Completá todos los campos de las preguntas', true); return; }
+
+  const url = editId ? `${API}/quizzes/${editId}` : `${API}/quizzes`;
+  const method = editId ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, questions }) });
+  const data = await res.json();
+
+  toast(editId ? 'Quiz actualizado ✓' : 'Quiz creado ✓');
+  document.getElementById('edit-id').value = '';
+  document.getElementById('quiz-title').value = '';
+  document.getElementById('questions-list').innerHTML = '';
+  document.getElementById('form-title').textContent = 'Nuevo quiz';
+  showView('quizzes');
+}
+
+async function editQuiz(id) {
+  const res = await fetch(`${API}/quizzes/${id}`);
+  const quiz = await res.json();
+  document.getElementById('edit-id').value = id;
+  document.getElementById('quiz-title').value = quiz.title;
+  document.getElementById('form-title').textContent = 'Editar quiz';
+  document.getElementById('questions-list').innerHTML = '';
+  quiz.questions.forEach(q => addQuestion(q));
+  showView('create');
+}
+
+async function deleteQuiz(id) {
+  if (!confirm('¿Eliminar este quiz?')) return;
+  await fetch(`${API}/quizzes/${id}`, { method: 'DELETE' });
+  toast('Quiz eliminado');
+  loadQuizzes();
+}
+
+// ── Game ────────────────────────────────────────────────────────────────────
+async function startGame(quizId, title) {
+  const baseUrl = window.location.origin;
+  const res = await fetch(`${API}/games`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quizId, baseUrl })
+  });
+  const game = await res.json();
+  currentGame = game;
+
+  document.getElementById('game-quiz-title').textContent = title;
+  document.getElementById('game-qr').src = game.qr;
+  document.getElementById('game-code').textContent = game.code;
+  document.getElementById('game-join-url').textContent = game.joinUrl;
+  document.getElementById('screen-link').href = `../screen/index.html?code=${game.code}`;
+  document.getElementById('btn-next').textContent = '▶ Iniciar juego';
+  document.getElementById('btn-reveal').style.display = 'none';
+  document.getElementById('player-lobby').innerHTML = '';
+  document.getElementById('ranking-preview').innerHTML = '';
+  document.getElementById('game-q-info').textContent = 'Esperando jugadores...';
+  document.getElementById('player-count').textContent = '0';
+  document.getElementById('game-status-badge').className = 'status-badge status-lobby';
+  document.getElementById('game-status-badge').innerHTML = '<span class="dot-pulse"></span> Lobby';
+
+  // Fetch question count
+  const qres = await fetch(`${API}/quizzes/${quizId}`);
+  const qdata = await qres.json();
+  questionCount = qdata.questions.length;
+
+  showView('game');
+  connectSocket(game.code);
+}
+
+function connectSocket(code) {
+  if (socket) socket.disconnect();
+  socket = io(API.replace('/api', ''));
+  socket.emit('admin:join', { code });
+
+  socket.on('lobby:update', ({ players }) => {
+    document.getElementById('player-count').textContent = players.length;
+    document.getElementById('player-lobby').innerHTML = players.map(p =>
+      `<div class="player-chip">${p.name}</div>`
+    ).join('');
+  });
+
+  socket.on('question:start', ({ index, total, text, timeLimit }) => {
+    document.getElementById('game-status-badge').className = 'status-badge status-live';
+    document.getElementById('game-status-badge').innerHTML = '<span class="dot-pulse"></span> En vivo';
+    document.getElementById('game-q-info').textContent = `Pregunta ${index + 1} de ${total}: "${text.substring(0,60)}..."`;
+    document.getElementById('btn-next').textContent = 'Siguiente →';
+    document.getElementById('btn-next').disabled = true;
+    document.getElementById('btn-reveal').style.display = 'inline-flex';
+  });
+
+  socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
+    document.getElementById('btn-next').disabled = false;
+    document.getElementById('btn-reveal').style.display = 'none';
+    showRanking(ranking);
+  });
+
+  socket.on('game:finished', ({ ranking }) => {
+    document.getElementById('game-status-badge').className = 'status-badge status-done';
+    document.getElementById('game-status-badge').innerHTML = '✓ Finalizado';
+    document.getElementById('game-q-info').textContent = '¡Juego terminado!';
+    document.getElementById('btn-next').textContent = 'Cerrar';
+    document.getElementById('btn-next').disabled = false;
+    showRanking(ranking);
+  });
+
+  socket.on('timer:tick', ({ timeLeft }) => {
+    if (timeLeft <= 5) document.getElementById('game-q-info').style.color = 'var(--danger)';
+    else document.getElementById('game-q-info').style.color = '';
+  });
+}
+
+function adminNext() { if (socket) socket.emit('admin:next'); }
+function adminReveal() { if (socket) socket.emit('admin:reveal'); }
+
+function showRanking(ranking) {
+  const medals = ['🥇','🥈','🥉'];
+  document.getElementById('ranking-preview').innerHTML = `
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Top jugadores</p>
+    ${ranking.map((p, i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px">
+        <span>${medals[i] || p.rank}</span>
+        <span style="flex:1">${p.name}</span>
+        <span style="color:var(--accent2);font-weight:600">${p.score.toLocaleString()}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+// Init
+loadQuizzes();
+</script>
+</body>
+</html>

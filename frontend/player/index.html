@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Synapto — Jugar</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d1a;
+      --surface: #161628;
+      --surface2: #1e1e38;
+      --border: rgba(255,255,255,0.08);
+      --accent: #7c5cfc;
+      --accent2: #4ecdc4;
+      --text: #f0f0ff;
+      --muted: rgba(240,240,255,0.45);
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; min-height: 100vh; }
+
+    .screen { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 16px; }
+    .hidden { display: none !important; }
+
+    /* Logo */
+    .logo { text-align: center; margin-bottom: 8px; }
+    .logo h1 { font-size: 28px; font-weight: 800; background: linear-gradient(90deg, #7c5cfc, #4ecdc4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* Card */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+
+    /* Input */
+    input[type="text"] {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); padding: 14px 16px; font-size: 16px; outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+
+    /* Btn */
+    .btn { width: 100%; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:active { transform: scale(.97); }
+    .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* Answer buttons */
+    .answers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .ans-btn {
+      padding: 20px 12px; border-radius: 14px; font-size: 15px; font-weight: 600;
+      cursor: pointer; border: none; color: #fff; transition: transform .1s, opacity .15s;
+      min-height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      text-align: center; line-height: 1.3;
+    }
+    .ans-btn:active { transform: scale(.95); }
+    .ans-btn.a0 { background: #e05555; }
+    .ans-btn.a1 { background: #2b9e9a; }
+    .ans-btn.a2 { background: #c9a227; }
+    .ans-btn.a3 { background: #3a9e5e; }
+    .ans-btn.correct { outline: 4px solid #fff; }
+    .ans-btn.wrong { opacity: .35; }
+    .ans-btn:disabled { cursor: default; }
+    .ans-letter { font-size: 22px; font-weight: 800; }
+
+    /* Timer bar */
+    .timer-bar { width: 100%; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+    .timer-fill { height: 100%; background: var(--accent2); border-radius: 3px; transition: width 1s linear, background .3s; }
+
+    /* Question text */
+    .q-text { font-size: 18px; font-weight: 600; line-height: 1.4; text-align: center; margin-bottom: 8px; }
+    .q-meta { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 16px; }
+
+    /* Score */
+    .score-big { font-size: 48px; font-weight: 800; text-align: center; color: var(--accent2); }
+    .score-label { font-size: 14px; color: var(--muted); text-align: center; }
+
+    /* Waiting */
+    .wait-icon { font-size: 48px; text-align: center; margin-bottom: 8px; }
+    .wait-text { font-size: 16px; color: var(--muted); text-align: center; }
+
+    /* Result */
+    .result-icon { font-size: 64px; text-align: center; }
+    .result-msg { font-size: 20px; font-weight: 700; text-align: center; }
+    .result-pts { font-size: 14px; color: var(--accent2); text-align: center; }
+
+    /* Ranking */
+    .ranking-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
+    .rank-medal { font-size: 20px; min-width: 28px; }
+    .rank-name { flex: 1; }
+    .rank-score { font-weight: 700; color: var(--accent2); }
+    .rank-me { background: rgba(124,92,252,.15); border-radius: 8px; padding: 10px; margin: -10px; }
+  </style>
+</head>
+<body>
+<div class="screen">
+
+  <!-- JOIN screen -->
+  <div id="s-join">
+    <div class="logo"><h1>Synapto</h1></div>
+    <div class="card" style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Código del juego</p>
+        <input type="text" id="inp-code" placeholder="ABC123" maxlength="8" style="text-transform:uppercase;font-size:20px;font-weight:700;letter-spacing:4px;text-align:center"/>
+      </div>
+      <div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Tu nombre</p>
+        <input type="text" id="inp-name" placeholder="¿Cómo te llamás?" maxlength="20"/>
+      </div>
+      <button class="btn btn-primary" onclick="joinGame()">Entrar al juego →</button>
+      <p id="join-error" style="color:#ff6b6b;font-size:13px;text-align:center;display:none"></p>
+    </div>
+  </div>
+
+  <!-- LOBBY screen -->
+  <div id="s-lobby" class="hidden">
+    <div class="logo"><h1>Synapto</h1></div>
+    <div class="card" style="text-align:center">
+      <div class="wait-icon">👋</div>
+      <p style="font-size:18px;font-weight:700;margin-bottom:4px">¡Estás dentro!</p>
+      <p id="lobby-name" style="font-size:15px;color:var(--muted);margin-bottom:16px"></p>
+      <div class="wait-text">Esperando que el admin inicie el juego…</div>
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:center;gap:8px">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .0s infinite ease-in-out"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .2s infinite ease-in-out"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .4s infinite ease-in-out"></div>
+      </div>
+    </div>
+    <style>@keyframes pulse{0%,100%{opacity:.2}50%{opacity:1}}</style>
+  </div>
+
+  <!-- QUESTION screen -->
+  <div id="s-question" class="hidden">
+    <div class="card" style="padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span id="q-counter" style="font-size:13px;color:var(--muted)">P 1/1</span>
+        <span id="q-timer" style="font-size:16px;font-weight:700;color:var(--accent2)">20</span>
+      </div>
+      <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+      <p class="q-text" id="q-text" style="margin-top:14px"></p>
+    </div>
+    <div class="answers" id="answers"></div>
+  </div>
+
+  <!-- WAITING after answer -->
+  <div id="s-wait" class="hidden">
+    <div class="card" style="text-align:center;padding:32px">
+      <div class="wait-icon">⏳</div>
+      <p style="font-size:16px;font-weight:600;margin-bottom:8px">Respuesta enviada</p>
+      <p class="wait-text">Esperando que todos respondan…</p>
+    </div>
+  </div>
+
+  <!-- RESULT screen -->
+  <div id="s-result" class="hidden">
+    <div class="card" style="text-align:center;padding:28px">
+      <div class="result-icon" id="r-icon"></div>
+      <p class="result-msg" id="r-msg" style="margin-top:8px"></p>
+      <p class="result-pts" id="r-pts" style="margin-top:6px"></p>
+      <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Ranking parcial</p>
+        <div id="r-ranking"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINAL screen -->
+  <div id="s-final" class="hidden">
+    <div class="card" style="text-align:center;padding:32px">
+      <div style="font-size:48px">🏆</div>
+      <p style="font-size:22px;font-weight:800;margin-top:8px">¡Juego terminado!</p>
+      <div class="score-big" id="final-score" style="margin:16px 0"></div>
+      <div class="score-label">puntos finales</div>
+      <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+        <div id="final-ranking"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = (window.SYNAPTO_BACKEND_URL || 'http://localhost:4000');
+let socket = null;
+let myName = '';
+let myScore = 0;
+let currentTimeLimit = 20;
+let timerInterval = null;
+
+// Pre-fill code from URL ?code=
+const urlCode = new URLSearchParams(window.location.search).get('code');
+if (urlCode) document.getElementById('inp-code').value = urlCode.toUpperCase();
+
+function show(id) {
+  ['s-join','s-lobby','s-question','s-wait','s-result','s-final'].forEach(s =>
+    document.getElementById(s).classList.add('hidden')
+  );
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function joinGame() {
+  const code = document.getElementById('inp-code').value.trim().toUpperCase();
+  const name = document.getElementById('inp-name').value.trim();
+  if (!code || !name) { showError('Completá el código y tu nombre'); return; }
+
+  socket = io(API);
+  socket.emit('player:join', { code, name });
+  myName = name;
+
+  socket.on('player:joined', ({ name }) => {
+    document.getElementById('lobby-name').textContent = `Jugás como: ${name}`;
+    show('s-lobby');
+  });
+
+  socket.on('error', (msg) => { showError(msg); if (socket) socket.disconnect(); });
+
+  socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
+    currentTimeLimit = timeLimit;
+    document.getElementById('q-counter').textContent = `P ${index + 1}/${total}`;
+    document.getElementById('q-text').textContent = text;
+    document.getElementById('q-timer').textContent = timeLimit;
+
+    const letters = ['A','B','C','D'];
+    const colors = ['a0','a1','a2','a3'];
+    document.getElementById('answers').innerHTML = options.map((opt, i) => `
+      <button class="ans-btn ${colors[i]}" onclick="sendAnswer(${i})">
+        <span class="ans-letter">${letters[i]}</span>
+        <span>${opt}</span>
+      </button>
+    `).join('');
+
+    startTimer(timeLimit);
+    show('s-question');
+  });
+
+  socket.on('timer:tick', ({ timeLeft }) => {
+    document.getElementById('q-timer').textContent = timeLeft;
+    const pct = (timeLeft / currentTimeLimit) * 100;
+    const fill = document.getElementById('timer-fill');
+    fill.style.width = pct + '%';
+    if (pct < 30) fill.style.background = '#e05555';
+    else fill.style.background = 'var(--accent2)';
+  });
+
+  socket.on('player:answer:result', ({ correct, correctIndex, score }) => {
+    myScore = score;
+    clearInterval(timerInterval);
+    const letters = ['A','B','C','D'];
+    document.querySelectorAll('.ans-btn').forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === correctIndex) btn.classList.add('correct');
+      else btn.classList.add('wrong');
+    });
+    setTimeout(() => show('s-wait'), 800);
+  });
+
+  socket.on('question:reveal', ({ correctIndex, ranking }) => {
+    const wasCorrect = false; // handled above
+    showResult(ranking);
+  });
+
+  socket.on('game:finished', ({ ranking }) => {
+    document.getElementById('final-score').textContent = myScore.toLocaleString();
+    const medals = ['🥇','🥈','🥉'];
+    document.getElementById('final-ranking').innerHTML = ranking.map((p, i) => `
+      <div class="ranking-item ${p.name === myName ? 'rank-me' : ''}">
+        <span class="rank-medal">${medals[i] || '#' + p.rank}</span>
+        <span class="rank-name">${p.name}</span>
+        <span class="rank-score">${p.score.toLocaleString()}</span>
+      </div>
+    `).join('');
+    show('s-final');
+  });
+}
+
+function sendAnswer(idx) {
+  document.querySelectorAll('.ans-btn').forEach(b => b.disabled = true);
+  socket.emit('player:answer', { answerIndex: idx });
+}
+
+function showResult(ranking) {
+  const medals = ['🥇','🥈','🥉'];
+  document.getElementById('r-ranking').innerHTML = ranking.map((p, i) => `
+    <div class="ranking-item ${p.name === myName ? 'rank-me' : ''}">
+      <span class="rank-medal">${medals[i] || '#' + p.rank}</span>
+      <span class="rank-name">${p.name}</span>
+      <span class="rank-score">${p.score.toLocaleString()}</span>
+    </div>
+  `).join('');
+  show('s-result');
+}
+
+function startTimer(seconds) {
+  clearInterval(timerInterval);
+  let t = seconds;
+  timerInterval = setInterval(() => {
+    t--;
+    if (t <= 0) clearInterval(timerInterval);
+  }, 1000);
+}
+
+function showError(msg) {
+  const el = document.getElementById('join-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 4000);
+}
+</script>
+</body>
+</html>

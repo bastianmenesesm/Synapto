@@ -1,0 +1,12 @@
+{
+  "name": "synapto-frontend",
+  "version": "1.0.0",
+  "description": "Synapto frontend",
+  "scripts": {
+    "build": "echo 'Static build ready'",
+    "dev": "npx serve . -p 3000"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}
