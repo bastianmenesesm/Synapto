@@ -280,20 +280,31 @@ Berlín
 
       <!-- QUESTION: fullscreen -->
       <div id="game-question-section" class="question-panel">
-        <div class="q-timer-bar"><div class="q-timer-fill" id="q-timer-fill" style="width:100%"></div></div>
-        <div class="q-text-big" id="q-text-display">...</div>
+        <!-- timer bar -->
+        <div class="q-timer-bar" id="q-timer-bar">
+          <div class="q-timer-fill" id="q-timer-fill" style="width:100%"></div>
+        </div>
 
-        <!-- options (visible durante la pregunta) -->
-        <div class="q-options-grid" id="q-options-display"></div>
+        <!-- question text (visible en question + reveal) -->
+        <div class="q-text-big" id="q-text-display" style="display:none"></div>
 
-        <!-- ranking post-reveal (oculto durante la pregunta) -->
+        <!-- options grid (visible en question + reveal) -->
+        <div class="q-options-grid" id="q-options-display" style="display:none"></div>
+
+        <!-- ranking parcial (visible en ranking state) -->
         <div id="ranking-preview" style="display:none"></div>
 
+        <!-- bottom bar -->
         <div class="game-bottom-bar">
-          <div style="font-size:14px;color:var(--muted)" id="game-q-info">Pregunta 1</div>
-          <div class="timer-text" id="q-timer-text">--</div>
+          <div id="game-q-info" style="font-size:14px;color:var(--muted)">Pregunta 1</div>
+          <div style="display:flex;align-items:center;gap:20px">
+            <div id="answered-count" style="font-size:13px;color:var(--muted);display:none">0 / 0 respondieron</div>
+            <div class="timer-text" id="q-timer-text" style="display:none">--</div>
+          </div>
           <div style="display:flex;gap:10px">
-            <button class="btn btn-success" id="btn-next-q" onclick="adminNext()" style="display:none">Siguiente →</button>
+            <button class="btn btn-primary" id="btn-ver-ranking" onclick="verRanking()" style="display:none">📊 Ver ranking</button>
+            <button class="btn btn-success" id="btn-siguiente-pregunta" onclick="siguientePregunta()" style="display:none">Siguiente pregunta →</button>
+            <button class="btn btn-danger"  id="btn-cerrar-juego"       onclick="showView('quizzes')"  style="display:none">Cerrar juego</button>
           </div>
         </div>
       </div>
@@ -457,8 +468,11 @@ async function deleteQuiz(id) {
 }
 
 // ── Game ────────────────────────────────────────────────────────────────────
-const OPT_COLORS = ['#e63946','#2a9d8f','#e9c46a','#4caf50'];
 const OPT_LABELS = ['A','B','C','D'];
+let gameState = 'lobby'; // lobby | question | reveal | ranking | finished
+let pendingRanking = null;
+let totalPlayers = 0;
+let answeredPlayers = 0;
 
 async function startGame(quizId, title) {
   const baseUrl = window.location.origin;
@@ -469,20 +483,18 @@ async function startGame(quizId, title) {
   });
   const game = await res.json();
   currentGame = game;
+  gameState = 'lobby';
+  pendingRanking = null;
 
   document.getElementById('game-quiz-title').textContent = title;
   document.getElementById('game-qr').src = game.qr;
   document.getElementById('game-code').textContent = game.code;
   document.getElementById('game-join-url').textContent = game.joinUrl;
   document.getElementById('screen-link').href = `/screen/?code=${game.code}`;
-  document.getElementById('btn-next').textContent = '▶ Iniciar juego';
   document.getElementById('player-lobby').innerHTML = '';
-  document.getElementById('ranking-preview').innerHTML = '';
   document.getElementById('player-count').textContent = '0';
-  document.getElementById('game-status-badge').className = 'status-badge status-lobby';
-  document.getElementById('game-status-badge').innerHTML = '<span class="dot-pulse"></span> Lobby';
+  setBadge('lobby');
 
-  // show lobby, hide question panel
   document.getElementById('game-lobby-section').style.display = 'grid';
   document.getElementById('game-question-section').classList.remove('active');
 
@@ -494,17 +506,42 @@ async function startGame(quizId, title) {
   connectSocket(game.code);
 }
 
-function showQuestionPanel(text, options, index, total, timeLimit) {
-  // hide lobby, show question
+function setBadge(state) {
+  const el = document.getElementById('game-status-badge');
+  if (state === 'lobby')    { el.className = 'status-badge status-lobby'; el.innerHTML = '<span class="dot-pulse"></span> Lobby'; }
+  if (state === 'live')     { el.className = 'status-badge status-live';  el.innerHTML = '<span class="dot-pulse"></span> En vivo'; }
+  if (state === 'finished') { el.className = 'status-badge status-done';  el.innerHTML = '✓ Finalizado'; }
+}
+
+function setButtons(ver, siguiente, cerrar) {
+  document.getElementById('btn-ver-ranking').style.display        = ver      ? 'inline-flex' : 'none';
+  document.getElementById('btn-siguiente-pregunta').style.display = siguiente ? 'inline-flex' : 'none';
+  document.getElementById('btn-cerrar-juego').style.display       = cerrar   ? 'inline-flex' : 'none';
+}
+
+function enterQuestionState(text, options, index, total, timeLimit) {
+  gameState = 'question';
+  answeredPlayers = 0;
+
+  // show question section, hide lobby
   document.getElementById('game-lobby-section').style.display = 'none';
   document.getElementById('game-question-section').classList.add('active');
 
+  // reset visibility
+  document.getElementById('q-timer-bar').style.display = 'block';
+  document.getElementById('q-text-display').style.display = 'block';
+  document.getElementById('q-options-display').style.display = 'grid';
+  document.getElementById('ranking-preview').style.display = 'none';
+  document.getElementById('ranking-preview').innerHTML = '';
+  document.getElementById('q-timer-text').style.display = 'block';
+  document.getElementById('answered-count').style.display = 'block';
+
+  // content
   document.getElementById('q-text-display').textContent = text;
   document.getElementById('game-q-info').textContent = `Pregunta ${index + 1} de ${total}`;
-  document.getElementById('q-timer-fill').style.transition = 'none';
-  document.getElementById('q-timer-fill').style.width = '100%';
   document.getElementById('q-timer-text').textContent = timeLimit;
   document.getElementById('q-timer-text').style.color = 'var(--accent2)';
+  document.getElementById('answered-count').textContent = `0 / ${totalPlayers} respondieron`;
 
   document.getElementById('q-options-display').innerHTML = options.map((opt, i) => `
     <div class="q-option-btn opt-${i}" id="qopt-${i}">
@@ -513,15 +550,49 @@ function showQuestionPanel(text, options, index, total, timeLimit) {
     </div>
   `).join('');
 
-  document.getElementById('btn-reveal').style.display = 'inline-flex';
-  document.getElementById('btn-next-q').style.display = 'none';
-  document.getElementById('ranking-preview').innerHTML = '';
+  setButtons(false, false, false);
 
-  // animate timer bar
+  // timer bar animation
+  const fill = document.getElementById('q-timer-fill');
+  fill.style.transition = 'none';
+  fill.style.width = '100%';
   setTimeout(() => {
-    document.getElementById('q-timer-fill').style.transition = `width ${timeLimit}s linear`;
-    document.getElementById('q-timer-fill').style.width = '0%';
+    fill.style.transition = `width ${timeLimit}s linear`;
+    fill.style.width = '0%';
   }, 50);
+}
+
+function enterRevealState(correctIndex) {
+  gameState = 'reveal';
+
+  // stop timer bar
+  const fill = document.getElementById('q-timer-fill');
+  const currentWidth = fill.getBoundingClientRect().width / fill.parentElement.getBoundingClientRect().width * 100;
+  fill.style.transition = 'none';
+  fill.style.width = currentWidth + '%';
+  setTimeout(() => { fill.style.transition = 'width .4s ease'; fill.style.width = '0%'; }, 50);
+
+  document.getElementById('q-timer-text').textContent = '—';
+  document.getElementById('answered-count').style.display = 'none';
+
+  // highlight options
+  document.querySelectorAll('[id^="qopt-"]').forEach((el, i) => {
+    el.classList.add(i === correctIndex ? 'revealed-correct' : 'revealed-wrong');
+  });
+
+  setButtons(true, false, false);
+}
+
+function enterRankingState() {
+  gameState = 'ranking';
+
+  document.getElementById('q-text-display').style.display = 'none';
+  document.getElementById('q-options-display').style.display = 'none';
+  document.getElementById('q-timer-bar').style.display = 'none';
+  document.getElementById('q-timer-text').style.display = 'none';
+
+  if (pendingRanking) showRanking(pendingRanking);
+  setButtons(false, true, false);
 }
 
 function connectSocket(code) {
@@ -530,6 +601,7 @@ function connectSocket(code) {
   socket.emit('admin:join', { code });
 
   socket.on('lobby:update', ({ players }) => {
+    totalPlayers = players.length;
     document.getElementById('player-count').textContent = players.length;
     document.getElementById('player-lobby').innerHTML = players.map(p =>
       `<div class="player-chip">${p.name}</div>`
@@ -537,50 +609,45 @@ function connectSocket(code) {
   });
 
   socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
-    document.getElementById('game-status-badge').className = 'status-badge status-live';
-    document.getElementById('game-status-badge').innerHTML = '<span class="dot-pulse"></span> En vivo';
-    showQuestionPanel(text, options, index, total, timeLimit);
+    setBadge('live');
+    pendingRanking = null;
+    enterQuestionState(text, options, index, total, timeLimit);
+  });
+
+  socket.on('player:answer:result', () => {
+    // track answered count (broadcast doesn't come here — we track via player count proxy)
   });
 
   socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
-    // highlight correct/wrong options
-    document.querySelectorAll('[id^="qopt-"]').forEach((el, i) => {
-      el.classList.add(i === correctIndex ? 'revealed-correct' : 'revealed-wrong');
-    });
-    document.getElementById('q-timer-fill').style.transition = 'none';
-    document.getElementById('q-timer-fill').style.width = '0%';
-    document.getElementById('q-timer-text').textContent = '—';
-
-    // swap: hide options, show ranking
-    setTimeout(() => {
-      document.getElementById('q-options-display').style.display = 'none';
-      showRanking(ranking, false);
-    }, 1200);
-
-    document.getElementById('btn-next-q').style.display = 'inline-flex';
-    document.getElementById('btn-next-q').textContent = 'Siguiente →';
+    pendingRanking = ranking;
+    // count answered = sum of tally
+    answeredPlayers = tally.reduce((a, b) => a + b, 0);
+    enterRevealState(correctIndex);
   });
 
   socket.on('game:finished', ({ ranking }) => {
-    document.getElementById('game-status-badge').className = 'status-badge status-done';
-    document.getElementById('game-status-badge').innerHTML = '✓ Finalizado';
-    document.getElementById('q-options-display').style.display = 'none';
+    setBadge('finished');
+    gameState = 'finished';
     document.getElementById('q-text-display').style.display = 'none';
+    document.getElementById('q-options-display').style.display = 'none';
     document.getElementById('q-timer-bar').style.display = 'none';
-    document.getElementById('q-timer-fill').style.transition = 'none';
-    document.getElementById('q-timer-fill').style.width = '0%';
-    document.getElementById('btn-next-q').style.display = 'inline-flex';
-    document.getElementById('btn-next-q').textContent = 'Cerrar juego';
+    document.getElementById('q-timer-text').style.display = 'none';
+    document.getElementById('answered-count').style.display = 'none';
+    document.getElementById('ranking-preview').style.display = 'none';
+    setButtons(false, false, true);
     showFinalRanking(ranking);
   });
 
   socket.on('timer:tick', ({ timeLeft }) => {
+    if (gameState !== 'question') return;
     document.getElementById('q-timer-text').textContent = timeLeft;
     if (timeLeft <= 5) document.getElementById('q-timer-text').style.color = 'var(--danger)';
+    else document.getElementById('q-timer-text').style.color = 'var(--accent2)';
   });
 }
 
-function adminNext() { if (socket) socket.emit('admin:next'); }
+function verRanking() { enterRankingState(); }
+function siguientePregunta() { if (socket) socket.emit('admin:next'); }
 
 function showRanking(ranking, isFinal) {
   const medals = ['🥇','🥈','🥉','4°','5°'];
