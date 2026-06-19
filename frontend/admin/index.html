@@ -111,6 +111,24 @@
     .dot-pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.2s ease-in-out infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
+    /* Question fullscreen */
+    .question-panel { display: none; flex-direction: column; gap: 24px; }
+    .question-panel.active { display: flex; }
+    .q-text-big { font-size: 28px; font-weight: 700; text-align: center; line-height: 1.3; padding: 28px 32px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .q-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .q-option-btn { padding: 20px 24px; border-radius: var(--radius); font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 14px; border: none; cursor: default; transition: transform .15s; }
+    .q-option-btn.opt-0 { background: #e63946; color: #fff; }
+    .q-option-btn.opt-1 { background: #2a9d8f; color: #fff; }
+    .q-option-btn.opt-2 { background: #e9c46a; color: #1a1a2e; }
+    .q-option-btn.opt-3 { background: #4caf50; color: #fff; }
+    .q-option-btn.revealed-correct { box-shadow: 0 0 0 4px #fff, 0 0 0 7px currentColor; transform: scale(1.02); }
+    .q-option-btn.revealed-wrong { opacity: 0.35; }
+    .opt-label { width: 34px; height: 34px; border-radius: 8px; background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; flex-shrink: 0; }
+    .q-timer-bar { height: 8px; background: var(--surface2); border-radius: 999px; overflow: hidden; }
+    .q-timer-fill { height: 100%; background: var(--accent2); border-radius: 999px; transition: width 1s linear; }
+    .game-bottom-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .timer-text { font-size: 24px; font-weight: 800; color: var(--accent2); }
+
     /* Views */
     .view { display: none; }
     .view.active { display: block; }
@@ -218,12 +236,13 @@ Berlín
         <h2 class="page-title" id="game-quiz-title">Partida en curso</h2>
         <div style="display:flex;gap:10px;align-items:center">
           <span id="game-status-badge" class="status-badge status-lobby"><span class="dot-pulse"></span> Lobby</span>
+          <a id="screen-link" href="#" target="_blank" class="btn btn-ghost btn-sm">🖥️ Pantalla</a>
           <button class="btn btn-ghost" onclick="showView('quizzes')">← Salir</button>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-        <!-- QR + code -->
+      <!-- LOBBY: QR + players -->
+      <div id="game-lobby-section" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <div class="card" style="text-align:center">
           <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Jugadores escanean para unirse</p>
           <div class="qr-wrap">
@@ -231,21 +250,31 @@ Berlín
           </div>
           <div class="game-code" id="game-code">------</div>
           <div class="join-url" id="game-join-url"></div>
-          <a id="screen-link" href="#" target="_blank" class="btn btn-ghost btn-sm" style="margin:0 auto;display:inline-flex">🖥️ Abrir pantalla</a>
         </div>
-
-        <!-- Players + controls -->
         <div class="card">
           <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Jugadores conectados (<span id="player-count">0</span>)</p>
           <div id="player-lobby" class="player-lobby"></div>
           <hr style="border-color:var(--border);margin:16px 0"/>
-          <div id="game-q-info" style="font-size:14px;color:var(--muted);margin-bottom:12px">Pregunta 0 de 0</div>
           <div class="game-ctrl">
             <button class="btn btn-success" id="btn-next" onclick="adminNext()">▶ Iniciar juego</button>
-            <button class="btn btn-ghost" id="btn-reveal" onclick="adminReveal()" style="display:none">⏭ Revelar</button>
           </div>
-          <div id="ranking-preview" style="margin-top:16px"></div>
         </div>
+      </div>
+
+      <!-- QUESTION: fullscreen -->
+      <div id="game-question-section" class="question-panel">
+        <div class="q-timer-bar"><div class="q-timer-fill" id="q-timer-fill" style="width:100%"></div></div>
+        <div class="q-text-big" id="q-text-display">...</div>
+        <div class="q-options-grid" id="q-options-display"></div>
+        <div class="game-bottom-bar">
+          <div style="font-size:14px;color:var(--muted)" id="game-q-info">Pregunta 1</div>
+          <div class="timer-text" id="q-timer-text">--</div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-ghost" id="btn-reveal" onclick="adminReveal()" style="display:none">⏭ Revelar ya</button>
+            <button class="btn btn-success" id="btn-next-q" onclick="adminNext()" style="display:none">Siguiente →</button>
+          </div>
+        </div>
+        <div id="ranking-preview"></div>
       </div>
     </div>
 
@@ -407,6 +436,9 @@ async function deleteQuiz(id) {
 }
 
 // ── Game ────────────────────────────────────────────────────────────────────
+const OPT_COLORS = ['#e63946','#2a9d8f','#e9c46a','#4caf50'];
+const OPT_LABELS = ['A','B','C','D'];
+
 async function startGame(quizId, title) {
   const baseUrl = window.location.origin;
   const res = await fetch(`${API}/games`, {
@@ -421,23 +453,54 @@ async function startGame(quizId, title) {
   document.getElementById('game-qr').src = game.qr;
   document.getElementById('game-code').textContent = game.code;
   document.getElementById('game-join-url').textContent = game.joinUrl;
-  document.getElementById('screen-link').href = `../screen/index.html?code=${game.code}`;
+  document.getElementById('screen-link').href = `/screen/?code=${game.code}`;
   document.getElementById('btn-next').textContent = '▶ Iniciar juego';
-  document.getElementById('btn-reveal').style.display = 'none';
   document.getElementById('player-lobby').innerHTML = '';
   document.getElementById('ranking-preview').innerHTML = '';
-  document.getElementById('game-q-info').textContent = 'Esperando jugadores...';
   document.getElementById('player-count').textContent = '0';
   document.getElementById('game-status-badge').className = 'status-badge status-lobby';
   document.getElementById('game-status-badge').innerHTML = '<span class="dot-pulse"></span> Lobby';
 
-  // Fetch question count
+  // show lobby, hide question panel
+  document.getElementById('game-lobby-section').style.display = 'grid';
+  document.getElementById('game-question-section').classList.remove('active');
+
   const qres = await fetch(`${API}/quizzes/${quizId}`);
   const qdata = await qres.json();
   questionCount = qdata.questions.length;
 
   showView('game');
   connectSocket(game.code);
+}
+
+function showQuestionPanel(text, options, index, total, timeLimit) {
+  // hide lobby, show question
+  document.getElementById('game-lobby-section').style.display = 'none';
+  document.getElementById('game-question-section').classList.add('active');
+
+  document.getElementById('q-text-display').textContent = text;
+  document.getElementById('game-q-info').textContent = `Pregunta ${index + 1} de ${total}`;
+  document.getElementById('q-timer-fill').style.transition = 'none';
+  document.getElementById('q-timer-fill').style.width = '100%';
+  document.getElementById('q-timer-text').textContent = timeLimit;
+  document.getElementById('q-timer-text').style.color = 'var(--accent2)';
+
+  document.getElementById('q-options-display').innerHTML = options.map((opt, i) => `
+    <div class="q-option-btn opt-${i}" id="qopt-${i}">
+      <span class="opt-label">${OPT_LABELS[i]}</span>
+      <span>${opt}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('btn-reveal').style.display = 'inline-flex';
+  document.getElementById('btn-next-q').style.display = 'none';
+  document.getElementById('ranking-preview').innerHTML = '';
+
+  // animate timer bar
+  setTimeout(() => {
+    document.getElementById('q-timer-fill').style.transition = `width ${timeLimit}s linear`;
+    document.getElementById('q-timer-fill').style.width = '0%';
+  }, 50);
 }
 
 function connectSocket(code) {
@@ -452,33 +515,36 @@ function connectSocket(code) {
     ).join('');
   });
 
-  socket.on('question:start', ({ index, total, text, timeLimit }) => {
+  socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
     document.getElementById('game-status-badge').className = 'status-badge status-live';
     document.getElementById('game-status-badge').innerHTML = '<span class="dot-pulse"></span> En vivo';
-    document.getElementById('game-q-info').textContent = `Pregunta ${index + 1} de ${total}: "${text.substring(0,60)}..."`;
-    document.getElementById('btn-next').textContent = 'Siguiente →';
-    document.getElementById('btn-next').disabled = true;
-    document.getElementById('btn-reveal').style.display = 'inline-flex';
+    showQuestionPanel(text, options, index, total, timeLimit);
   });
 
   socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
-    document.getElementById('btn-next').disabled = false;
+    // highlight correct/wrong options
+    document.querySelectorAll('[id^="qopt-"]').forEach((el, i) => {
+      el.classList.add(i === correctIndex ? 'revealed-correct' : 'revealed-wrong');
+    });
     document.getElementById('btn-reveal').style.display = 'none';
+    document.getElementById('btn-next-q').style.display = 'inline-flex';
+    document.getElementById('btn-next-q').textContent = 'Siguiente →';
+    document.getElementById('q-timer-fill').style.width = '0%';
     showRanking(ranking);
   });
 
   socket.on('game:finished', ({ ranking }) => {
     document.getElementById('game-status-badge').className = 'status-badge status-done';
     document.getElementById('game-status-badge').innerHTML = '✓ Finalizado';
-    document.getElementById('game-q-info').textContent = '¡Juego terminado!';
-    document.getElementById('btn-next').textContent = 'Cerrar';
-    document.getElementById('btn-next').disabled = false;
+    document.getElementById('btn-reveal').style.display = 'none';
+    document.getElementById('btn-next-q').style.display = 'inline-flex';
+    document.getElementById('btn-next-q').textContent = 'Cerrar juego';
     showRanking(ranking);
   });
 
   socket.on('timer:tick', ({ timeLeft }) => {
-    if (timeLeft <= 5) document.getElementById('game-q-info').style.color = 'var(--danger)';
-    else document.getElementById('game-q-info').style.color = '';
+    document.getElementById('q-timer-text').textContent = timeLeft;
+    if (timeLeft <= 5) document.getElementById('q-timer-text').style.color = 'var(--danger)';
   });
 }
 
@@ -488,14 +554,16 @@ function adminReveal() { if (socket) socket.emit('admin:reveal'); }
 function showRanking(ranking) {
   const medals = ['🥇','🥈','🥉'];
   document.getElementById('ranking-preview').innerHTML = `
-    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Top jugadores</p>
-    ${ranking.map((p, i) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px">
-        <span>${medals[i] || p.rank}</span>
-        <span style="flex:1">${p.name}</span>
-        <span style="color:var(--accent2);font-weight:600">${p.score.toLocaleString()}</span>
-      </div>
-    `).join('')}
+    <div class="card" style="padding:16px">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Top jugadores</p>
+      ${ranking.map((p, i) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px">
+          <span>${medals[i] || p.rank}</span>
+          <span style="flex:1">${p.name}</span>
+          <span style="color:var(--accent2);font-weight:600">${p.score.toLocaleString()}</span>
+        </div>
+      `).join('')}
+    </div>
   `;
 }
 
