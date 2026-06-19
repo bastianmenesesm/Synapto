@@ -265,16 +265,20 @@ Berlín
       <div id="game-question-section" class="question-panel">
         <div class="q-timer-bar"><div class="q-timer-fill" id="q-timer-fill" style="width:100%"></div></div>
         <div class="q-text-big" id="q-text-display">...</div>
+
+        <!-- options (visible durante la pregunta) -->
         <div class="q-options-grid" id="q-options-display"></div>
+
+        <!-- ranking post-reveal (oculto durante la pregunta) -->
+        <div id="ranking-preview" style="display:none"></div>
+
         <div class="game-bottom-bar">
           <div style="font-size:14px;color:var(--muted)" id="game-q-info">Pregunta 1</div>
           <div class="timer-text" id="q-timer-text">--</div>
           <div style="display:flex;gap:10px">
-            <button class="btn btn-ghost" id="btn-reveal" onclick="adminReveal()" style="display:none">⏭ Revelar ya</button>
             <button class="btn btn-success" id="btn-next-q" onclick="adminNext()" style="display:none">Siguiente →</button>
           </div>
         </div>
-        <div id="ranking-preview"></div>
       </div>
     </div>
 
@@ -526,20 +530,27 @@ function connectSocket(code) {
     document.querySelectorAll('[id^="qopt-"]').forEach((el, i) => {
       el.classList.add(i === correctIndex ? 'revealed-correct' : 'revealed-wrong');
     });
-    document.getElementById('btn-reveal').style.display = 'none';
+    document.getElementById('q-timer-fill').style.transition = 'none';
+    document.getElementById('q-timer-fill').style.width = '0%';
+    document.getElementById('q-timer-text').textContent = '—';
+
+    // swap: hide options, show ranking
+    setTimeout(() => {
+      document.getElementById('q-options-display').style.display = 'none';
+      showRanking(ranking, false);
+    }, 1200);
+
     document.getElementById('btn-next-q').style.display = 'inline-flex';
     document.getElementById('btn-next-q').textContent = 'Siguiente →';
-    document.getElementById('q-timer-fill').style.width = '0%';
-    showRanking(ranking);
   });
 
   socket.on('game:finished', ({ ranking }) => {
     document.getElementById('game-status-badge').className = 'status-badge status-done';
     document.getElementById('game-status-badge').innerHTML = '✓ Finalizado';
-    document.getElementById('btn-reveal').style.display = 'none';
+    document.getElementById('q-options-display').style.display = 'none';
+    showRanking(ranking, true);
     document.getElementById('btn-next-q').style.display = 'inline-flex';
     document.getElementById('btn-next-q').textContent = 'Cerrar juego';
-    showRanking(ranking);
   });
 
   socket.on('timer:tick', ({ timeLeft }) => {
@@ -549,18 +560,27 @@ function connectSocket(code) {
 }
 
 function adminNext() { if (socket) socket.emit('admin:next'); }
-function adminReveal() { if (socket) socket.emit('admin:reveal'); }
 
-function showRanking(ranking) {
-  const medals = ['🥇','🥈','🥉'];
-  document.getElementById('ranking-preview').innerHTML = `
-    <div class="card" style="padding:16px">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Top jugadores</p>
+function showRanking(ranking, isFinal) {
+  const medals = ['🥇','🥈','🥉','4°','5°'];
+  const maxScore = ranking[0]?.score || 1;
+  const el = document.getElementById('ranking-preview');
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div class="card" style="padding:20px">
+      <p style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px">
+        ${isFinal ? '🏆 Ranking final' : '📊 Ranking parcial'}
+      </p>
       ${ranking.map((p, i) => `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px">
-          <span>${medals[i] || p.rank}</span>
-          <span style="flex:1">${p.name}</span>
-          <span style="color:var(--accent2);font-weight:600">${p.score.toLocaleString()}</span>
+        <div style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <span style="font-size:18px;width:28px;text-align:center">${medals[i] || (i+1)+'°'}</span>
+            <span style="flex:1;font-weight:600;font-size:15px">${p.name}</span>
+            <span style="color:var(--accent2);font-weight:800;font-size:16px">${p.score.toLocaleString()} pts</span>
+          </div>
+          <div style="height:6px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-left:38px">
+            <div style="height:100%;width:${Math.round((p.score/maxScore)*100)}%;background:${i===0?'var(--accent2)':'var(--accent)'};border-radius:999px;transition:width .6s ease"></div>
+          </div>
         </div>
       `).join('')}
     </div>
