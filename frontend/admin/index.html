@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Synapto — Admin</title>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="../config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -174,7 +175,33 @@
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
             <label>Preguntas</label>
-            <button class="btn btn-ghost btn-sm" onclick="addQuestion()">+ Agregar pregunta</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="toggleImport()">📋 Importar texto</button>
+              <button class="btn btn-ghost btn-sm" onclick="addQuestion()">+ Agregar pregunta</button>
+            </div>
+          </div>
+          <div id="import-box" style="display:none;margin-bottom:16px">
+            <div class="card" style="padding:16px">
+              <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+                Pegá tus preguntas en este formato. Separá cada pregunta con una línea en blanco. Marcá la respuesta correcta con <strong>*</strong> al final.
+              </p>
+              <pre style="font-size:12px;color:var(--accent2);margin-bottom:12px;background:var(--bg);padding:10px;border-radius:8px">¿Cuál es la capital de Francia?
+París*
+Londres
+Madrid
+Berlín
+
+¿Cuánto es 2+2?
+4*
+3
+5
+6</pre>
+              <textarea id="import-text" style="min-height:180px;font-family:monospace;font-size:13px" placeholder="Pegá tus preguntas aquí..."></textarea>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn btn-primary btn-sm" onclick="importQuestions()">Importar</button>
+                <button class="btn btn-ghost btn-sm" onclick="toggleImport()">Cancelar</button>
+              </div>
+            </div>
           </div>
           <div id="questions-list" class="questions-list"></div>
         </div>
@@ -229,7 +256,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const API = (window.SYNAPTO_BACKEND_URL || 'http://localhost:4000') + '/api';
+const API = SYNAPTO_CONFIG.backendUrl + '/api';
 let socket = null;
 let currentGame = null;
 let questionCount = 0;
@@ -470,6 +497,43 @@ function showRanking(ranking) {
       </div>
     `).join('')}
   `;
+}
+
+// ── Import from text ────────────────────────────────────────────────────────
+function toggleImport() {
+  const box = document.getElementById('import-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function importQuestions() {
+  const raw = document.getElementById('import-text').value.trim();
+  if (!raw) { toast('Pegá preguntas primero', true); return; }
+
+  const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+  let imported = 0;
+
+  blocks.forEach(block => {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 3) return;
+
+    const text = lines[0];
+    const optionLines = lines.slice(1, 5);
+    if (optionLines.length < 2) return;
+
+    const options = optionLines.map(l => l.replace(/\*$/, ''));
+    const correctIndex = optionLines.findIndex(l => l.endsWith('*'));
+
+    addQuestion({ text, options: options.concat(Array(4 - options.length).fill('')), correctIndex: correctIndex >= 0 ? correctIndex : 0, timeLimit: 20 });
+    imported++;
+  });
+
+  if (imported > 0) {
+    toast(`${imported} pregunta${imported > 1 ? 's' : ''} importada${imported > 1 ? 's' : ''} ✓`);
+    document.getElementById('import-text').value = '';
+    toggleImport();
+  } else {
+    toast('No se encontraron preguntas válidas', true);
+  }
 }
 
 // Init

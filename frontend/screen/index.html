@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Synapto — Pantalla</title>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="../config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -127,7 +128,7 @@
 </div>
 
 <script>
-const API = (window.SYNAPTO_BACKEND_URL || 'http://localhost:4000');
+const API = SYNAPTO_CONFIG.backendUrl;
 const code = new URLSearchParams(window.location.search).get('code');
 let currentQ = null;
 let timerLimit = 20;
