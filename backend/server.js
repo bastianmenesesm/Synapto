@@ -40,7 +40,13 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // Get all quizzes
 app.get('/api/quizzes', (req, res) => {
-  const quizzes = db.prepare('SELECT * FROM quizzes ORDER BY created_at DESC').all();
+  const quizzes = db.prepare(`
+    SELECT q.*, COUNT(qs.id) as question_count
+    FROM quizzes q
+    LEFT JOIN questions qs ON q.id = qs.quiz_id
+    GROUP BY q.id
+    ORDER BY q.created_at DESC
+  `).all();
   res.json(quizzes);
 });
 

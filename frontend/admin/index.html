@@ -24,26 +24,35 @@
     body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
     a { color: var(--accent2); text-decoration: none; }
 
-    /* Layout */
-    .shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
-    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; display: flex; flex-direction: column; }
+    .shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; transition: grid-template-columns 0.25s ease; }
+    .shell.collapsed { grid-template-columns: 64px 1fr; }
+
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 0; display: flex; flex-direction: column; overflow: hidden; transition: width 0.25s ease; }
     .main { padding: 32px; overflow-y: auto; }
 
-    /* Logo */
-    .logo { padding: 0 24px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-    .logo h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .logo span { font-size: 12px; color: var(--muted); display: block; margin-top: 2px; }
+    .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 0; }
+    .logo { padding: 20px 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px; flex: 1; overflow: hidden; }
+    .logo h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; }
+    .logo span { font-size: 12px; color: var(--muted); display: block; margin-top: 2px; white-space: nowrap; }
 
-    /* Nav */
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 24px; font-size: 14px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; transition: all .15s; }
+    .sidebar-header { display: flex; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 16px; padding: 16px 16px 16px; gap: 12px; }
+    .sidebar-header .logo-text { overflow: hidden; transition: opacity 0.2s, width 0.25s; }
+    .shell.collapsed .sidebar-header .logo-text { opacity: 0; width: 0; pointer-events: none; }
+    .sidebar-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; }
+    .sidebar-header span { font-size: 12px; color: var(--muted); display: block; margin-top: 2px; white-space: nowrap; }
+
+    .toggle-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; flex-shrink: 0; transition: background 0.15s; }
+    .toggle-btn:hover { background: var(--accent); }
+
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 14px; color: var(--muted); cursor: pointer; border-left: 3px solid transparent; transition: all .15s; white-space: nowrap; overflow: hidden; }
     .nav-item:hover, .nav-item.active { color: var(--text); background: var(--surface2); border-left-color: var(--accent); }
-    .nav-icon { width: 18px; height: 18px; }
+    .nav-icon { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-label { transition: opacity 0.2s; }
+    .shell.collapsed .nav-label { opacity: 0; width: 0; overflow: hidden; }
 
-    /* Header */
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
     .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
 
-    /* Buttons */
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; }
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-primary:hover { background: #6a4de8; }
@@ -55,16 +64,14 @@
     .btn-success { background: var(--success); color: #fff; }
     .btn-success:hover { opacity: .85; }
 
-    /* Cards */
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
     .quiz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
     .quiz-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 12px; transition: border-color .15s; }
     .quiz-card:hover { border-color: var(--accent); }
     .quiz-card h3 { font-size: 16px; font-weight: 600; }
     .quiz-card .meta { font-size: 13px; color: var(--muted); }
-    .quiz-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .quiz-actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 
-    /* Forms */
     .form-section { display: flex; flex-direction: column; gap: 20px; max-width: 720px; }
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     label { font-size: 13px; color: var(--muted); font-weight: 500; }
@@ -76,7 +83,6 @@
     input:focus, textarea:focus, select:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 80px; }
 
-    /* Question builder */
     .questions-list { display: flex; flex-direction: column; gap: 16px; }
     .q-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
     .q-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -91,7 +97,6 @@
     .option-dot.correct { border-width: 2px; box-shadow: 0 0 0 2px currentColor; }
     .option-input { flex: 1; }
 
-    /* Game modal */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: flex; align-items: center; justify-content: center; z-index: 100; }
     .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: 460px; max-width: 95vw; }
     .modal h2 { font-size: 20px; margin-bottom: 20px; }
@@ -102,7 +107,6 @@
     .player-lobby { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; min-height: 40px; }
     .player-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 13px; }
 
-    /* Game controls */
     .game-ctrl { display: flex; gap: 12px; margin-top: 8px; }
     .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
     .status-lobby { background: #7c5cfc22; color: var(--accent); }
@@ -111,8 +115,7 @@
     .dot-pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.2s ease-in-out infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    /* Question fullscreen */
-    .question-panel { display: none; flex-direction: column; gap: 24px; }
+    .question-panel { display: none; flex-direction: column; gap: 24px; position: relative; }
     .question-panel.active { display: flex; }
     .q-text-big { font-size: 28px; font-weight: 700; text-align: center; line-height: 1.3; padding: 28px 32px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
     .q-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -129,7 +132,6 @@
     .game-bottom-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
     .timer-text { font-size: 24px; font-weight: 800; color: var(--accent2); }
 
-    /* Final ranking reveal */
     .final-ranking-wrap { display: flex; flex-direction: column; gap: 0; max-width: 680px; margin: 0 auto; width: 100%; }
     .final-title { text-align: center; font-size: 28px; font-weight: 800; margin-bottom: 28px; letter-spacing: -0.5px; }
     .rank-row { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: var(--radius); margin-bottom: 10px; opacity: 0; transform: translateY(20px); transition: opacity .4s ease, transform .4s ease; background: var(--surface); border: 1px solid var(--border); }
@@ -146,42 +148,64 @@
     .suspense-text { text-align: center; font-size: 20px; font-weight: 700; color: var(--accent); opacity: 0; transition: opacity .3s; margin-bottom: 16px; }
     .suspense-text.show { opacity: 1; }
 
-    /* Views */
     .view { display: none; }
     .view.active { display: block; }
 
     .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
     .empty-icon { font-size: 48px; margin-bottom: 12px; }
 
-    /* Toast */
     .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 20px; font-size: 14px; z-index: 999; opacity: 0; transform: translateY(8px); transition: all .2s; }
     .toast.show { opacity: 1; transform: translateY(0); }
+
+    .q-progress-dots { display: flex; align-items: center; gap: 8px; justify-content: center; padding: 4px 0; }
+    .q-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: background 0.3s; flex-shrink: 0; }
+    .q-dot.done { background: var(--success); }
+    .q-dot.current { background: var(--accent2); transform: scale(1.3); }
+
+    .correct-banner { text-align: center; padding: 14px 20px; border-radius: var(--radius); font-size: 17px; font-weight: 700; margin-top: 4px; }
+    .correct-banner.good { background: rgba(81,207,102,0.15); color: var(--success); border: 1px solid rgba(81,207,102,0.3); }
+    .correct-banner.bad { background: rgba(255,107,107,0.15); color: var(--danger); border: 1px solid rgba(255,107,107,0.3); }
+
+    .countdown-overlay { position: absolute; inset: 0; background: rgba(13,13,26,0.92); display: flex; align-items: center; justify-content: center; z-index: 50; border-radius: var(--radius); }
+    .countdown-number { font-size: 120px; font-weight: 900; color: var(--accent2); animation: cdpop 0.8s ease forwards; line-height: 1; }
+    .countdown-go { font-size: 56px; font-weight: 900; color: var(--success); animation: cdpop 0.8s ease forwards; }
+    @keyframes cdpop { 0% { transform: scale(1.6); opacity: 0; } 30% { opacity: 1; } 80% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+
+    .podium-wrap { display: flex; align-items: flex-end; justify-content: center; gap: 12px; padding: 32px 20px 20px; opacity: 0; transform: translateY(30px); transition: opacity 0.6s ease, transform 0.6s ease; max-width: 680px; margin: 0 auto; }
+    .podium-wrap.visible { opacity: 1; transform: translateY(0); }
+    .podium-col { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; }
+    .podium-name { font-size: 15px; font-weight: 700; text-align: center; word-break: break-word; }
+    .podium-score { font-size: 13px; color: var(--muted); text-align: center; }
+    .podium-base { width: 100%; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+    .podium-base.gold { background: #FFD70022; border: 2px solid #FFD700; height: 110px; }
+    .podium-base.silver { background: #C0C0C022; border: 2px solid #C0C0C0; height: 80px; }
+    .podium-base.bronze { background: #CD7F3222; border: 2px solid #CD7F32; height: 60px; }
   </style>
 </head>
 <body>
-<div class="shell">
-  <!-- Sidebar -->
+<div class="shell" id="shell">
   <aside class="sidebar">
-    <div class="logo">
-      <h1>Synapto</h1>
-      <span>Panel de administración</span>
+    <div class="sidebar-header">
+      <button class="toggle-btn" onclick="toggleSidebar()" title="Colapsar sidebar">☰</button>
+      <div class="logo-text">
+        <h1>Synapto</h1>
+        <span>Panel de administración</span>
+      </div>
     </div>
     <nav>
       <div class="nav-item active" onclick="showView('quizzes')">
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-        Mis quizzes
+        <span class="nav-label">Mis quizzes</span>
       </div>
       <div class="nav-item" onclick="showView('create')">
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Nuevo quiz
+        <span class="nav-label">Nuevo quiz</span>
       </div>
     </nav>
   </aside>
 
-  <!-- Main -->
   <main class="main">
 
-    <!-- Quiz list -->
     <div id="view-quizzes" class="view active">
       <div class="page-header">
         <h2 class="page-title">Mis quizzes</h2>
@@ -195,7 +219,6 @@
       </div>
     </div>
 
-    <!-- Create / Edit quiz -->
     <div id="view-create" class="view">
       <div class="page-header">
         <h2 class="page-title" id="form-title">Nuevo quiz</h2>
@@ -247,7 +270,6 @@ Berlín
       </div>
     </div>
 
-    <!-- Game view -->
     <div id="view-game" class="view">
       <div class="page-header">
         <h2 class="page-title" id="game-quiz-title">Partida en curso</h2>
@@ -258,7 +280,6 @@ Berlín
         </div>
       </div>
 
-      <!-- LOBBY: QR + players -->
       <div id="game-lobby-section" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <div class="card" style="text-align:center">
           <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Jugadores escanean para unirse</p>
@@ -278,23 +299,21 @@ Berlín
         </div>
       </div>
 
-      <!-- QUESTION: fullscreen -->
       <div id="game-question-section" class="question-panel">
-        <!-- timer bar -->
         <div class="q-timer-bar" id="q-timer-bar">
           <div class="q-timer-fill" id="q-timer-fill" style="width:100%"></div>
         </div>
 
-        <!-- question text (visible en question + reveal) -->
+        <div class="q-progress-dots" id="q-progress-dots" style="display:none"></div>
+
         <div class="q-text-big" id="q-text-display" style="display:none"></div>
 
-        <!-- options grid (visible en question + reveal) -->
         <div class="q-options-grid" id="q-options-display" style="display:none"></div>
 
-        <!-- ranking parcial (visible en ranking state) -->
+        <div id="correct-banner" style="display:none"></div>
+
         <div id="ranking-preview" style="display:none"></div>
 
-        <!-- bottom bar -->
         <div class="game-bottom-bar">
           <div id="game-q-info" style="font-size:14px;color:var(--muted)">Pregunta 1</div>
           <div style="display:flex;align-items:center;gap:20px">
@@ -313,7 +332,6 @@ Berlín
   </main>
 </div>
 
-<!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -321,8 +339,24 @@ const API = SYNAPTO_CONFIG.backendUrl + '/api';
 let socket = null;
 let currentGame = null;
 let questionCount = 0;
+let gameState = 'lobby';
+let pendingRanking = null;
+let totalPlayers = 0;
+let answeredPlayers = 0;
+const OPT_LABELS = ['A','B','C','D'];
 
-// ── Navigation ─────────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const shell = document.getElementById('shell');
+  const collapsed = shell.classList.toggle('collapsed');
+  localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
+}
+
+(function initSidebar() {
+  if (localStorage.getItem('sidebar-collapsed') === '1') {
+    document.getElementById('shell').classList.add('collapsed');
+  }
+})();
+
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
@@ -331,7 +365,6 @@ function showView(name) {
   if (name === 'create') { document.querySelectorAll('.nav-item')[1].classList.add('active'); }
 }
 
-// ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg, err = false) {
   const el = document.getElementById('toast');
   el.textContent = msg;
@@ -340,7 +373,6 @@ function toast(msg, err = false) {
   setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-// ── Load quizzes ────────────────────────────────────────────────────────────
 async function loadQuizzes() {
   const res = await fetch(API + '/quizzes');
   const quizzes = await res.json();
@@ -349,20 +381,43 @@ async function loadQuizzes() {
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🎯</div><p>Todavía no tenés quizzes.<br>¡Creá el primero!</p></div>';
     return;
   }
-  grid.innerHTML = quizzes.map(q => `
+  grid.innerHTML = quizzes.map(q => {
+    const qCount = q.question_count != null ? q.question_count : '?';
+    const qLabel = qCount !== 1 ? 'preguntas' : 'pregunta';
+    const fecha = new Date(q.created_at).toLocaleDateString('es-AR');
+    return `
     <div class="quiz-card">
       <h3>${q.title}</h3>
-      <div class="meta">Creado el ${new Date(q.created_at).toLocaleDateString('es-AR')}</div>
+      <div class="meta">${qCount} ${qLabel} · Creado el ${fecha}</div>
       <div class="quiz-actions">
-        <button class="btn btn-primary btn-sm" onclick="startGame('${q.id}','${q.title}')">▶ Jugar</button>
+        <button class="btn btn-primary btn-sm" onclick="startGame('${q.id}','${q.title.replace(/'/g,"\\'")}')">▶ Jugar</button>
         <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️ Editar</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateQuiz('${q.id}')">📋 Duplicar</button>
         <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}')">🗑️</button>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
-// ── Create/Edit quiz ────────────────────────────────────────────────────────
+async function duplicateQuiz(id) {
+  const res = await fetch(`${API}/quizzes/${id}`);
+  const quiz = await res.json();
+  const newTitle = quiz.title + ' (copia)';
+  const questions = quiz.questions.map(q => ({
+    text: q.text,
+    options: q.options,
+    correctIndex: q.correct_index,
+    timeLimit: q.time_limit
+  }));
+  await fetch(`${API}/quizzes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: newTitle, questions })
+  });
+  toast('Quiz duplicado ✓');
+  loadQuizzes();
+}
+
 function addQuestion(data = null) {
   const list = document.getElementById('questions-list');
   const idx = list.children.length;
@@ -438,8 +493,7 @@ async function saveQuiz() {
 
   const url = editId ? `${API}/quizzes/${editId}` : `${API}/quizzes`;
   const method = editId ? 'PUT' : 'POST';
-  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, questions }) });
-  const data = await res.json();
+  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, questions }) });
 
   toast(editId ? 'Quiz actualizado ✓' : 'Quiz creado ✓');
   document.getElementById('edit-id').value = '';
@@ -466,13 +520,6 @@ async function deleteQuiz(id) {
   toast('Quiz eliminado');
   loadQuizzes();
 }
-
-// ── Game ────────────────────────────────────────────────────────────────────
-const OPT_LABELS = ['A','B','C','D'];
-let gameState = 'lobby'; // lobby | question | reveal | ranking | finished
-let pendingRanking = null;
-let totalPlayers = 0;
-let answeredPlayers = 0;
 
 async function startGame(quizId, title) {
   const baseUrl = window.location.origin;
@@ -519,29 +566,73 @@ function setButtons(ver, siguiente, cerrar) {
   document.getElementById('btn-cerrar-juego').style.display       = cerrar   ? 'inline-flex' : 'none';
 }
 
+function updateProgressDots(currentIndex, total) {
+  const container = document.getElementById('q-progress-dots');
+  container.style.display = 'flex';
+  container.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'q-dot';
+    if (i < currentIndex) dot.classList.add('done');
+    else if (i === currentIndex) dot.classList.add('current');
+    container.appendChild(dot);
+  }
+}
+
+function showCountdown(onDone) {
+  const section = document.getElementById('game-question-section');
+  const existing = document.getElementById('countdown-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'countdown-overlay';
+  overlay.id = 'countdown-overlay';
+  section.appendChild(overlay);
+
+  const steps = ['3', '2', '1', '¡Empezamos!'];
+  let i = 0;
+
+  function showStep() {
+    overlay.innerHTML = '';
+    if (i >= steps.length) {
+      overlay.remove();
+      onDone();
+      return;
+    }
+    const el = document.createElement('div');
+    el.className = i < 3 ? 'countdown-number' : 'countdown-go';
+    el.textContent = steps[i];
+    overlay.appendChild(el);
+    i++;
+    setTimeout(showStep, 800);
+  }
+
+  showStep();
+}
+
 function enterQuestionState(text, options, index, total, timeLimit) {
   gameState = 'question';
   answeredPlayers = 0;
 
-  // show question section, hide lobby
   document.getElementById('game-lobby-section').style.display = 'none';
   document.getElementById('game-question-section').classList.add('active');
 
-  // reset visibility
   document.getElementById('q-timer-bar').style.display = 'block';
   document.getElementById('q-text-display').style.display = 'block';
   document.getElementById('q-options-display').style.display = 'grid';
   document.getElementById('ranking-preview').style.display = 'none';
   document.getElementById('ranking-preview').innerHTML = '';
+  document.getElementById('correct-banner').style.display = 'none';
   document.getElementById('q-timer-text').style.display = 'block';
   document.getElementById('answered-count').style.display = 'block';
 
-  // content
   document.getElementById('q-text-display').textContent = text;
   document.getElementById('game-q-info').textContent = `Pregunta ${index + 1} de ${total}`;
   document.getElementById('q-timer-text').textContent = timeLimit;
   document.getElementById('q-timer-text').style.color = 'var(--accent2)';
   document.getElementById('answered-count').textContent = `0 / ${totalPlayers} respondieron`;
+
+  updateProgressDots(index, total);
 
   document.getElementById('q-options-display').innerHTML = options.map((opt, i) => `
     <div class="q-option-btn opt-${i}" id="qopt-${i}">
@@ -552,7 +643,6 @@ function enterQuestionState(text, options, index, total, timeLimit) {
 
   setButtons(false, false, false);
 
-  // timer bar animation
   const fill = document.getElementById('q-timer-fill');
   fill.style.transition = 'none';
   fill.style.width = '100%';
@@ -562,10 +652,9 @@ function enterQuestionState(text, options, index, total, timeLimit) {
   }, 50);
 }
 
-function enterRevealState(correctIndex) {
+function enterRevealState(correctIndex, tally) {
   gameState = 'reveal';
 
-  // stop timer bar
   const fill = document.getElementById('q-timer-fill');
   const currentWidth = fill.getBoundingClientRect().width / fill.parentElement.getBoundingClientRect().width * 100;
   fill.style.transition = 'none';
@@ -575,10 +664,19 @@ function enterRevealState(correctIndex) {
   document.getElementById('q-timer-text').textContent = '—';
   document.getElementById('answered-count').style.display = 'none';
 
-  // highlight options
   document.querySelectorAll('[id^="qopt-"]').forEach((el, i) => {
     el.classList.add(i === correctIndex ? 'revealed-correct' : 'revealed-wrong');
   });
+
+  if (tally && tally.length > 0) {
+    const correct = tally[correctIndex] || 0;
+    const total = tally.reduce((a, b) => a + b, 0);
+    const banner = document.getElementById('correct-banner');
+    const pct = total > 0 ? correct / total : 0;
+    banner.className = 'correct-banner ' + (pct > 0.5 ? 'good' : 'bad');
+    banner.textContent = `✅ ${correct} de ${total} acertaron`;
+    banner.style.display = 'block';
+  }
 
   setButtons(true, false, false);
 }
@@ -590,6 +688,7 @@ function enterRankingState() {
   document.getElementById('q-options-display').style.display = 'none';
   document.getElementById('q-timer-bar').style.display = 'none';
   document.getElementById('q-timer-text').style.display = 'none';
+  document.getElementById('correct-banner').style.display = 'none';
 
   if (pendingRanking) showRanking(pendingRanking);
   setButtons(false, true, false);
@@ -611,18 +710,19 @@ function connectSocket(code) {
   socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
     setBadge('live');
     pendingRanking = null;
-    enterQuestionState(text, options, index, total, timeLimit);
+    document.getElementById('game-lobby-section').style.display = 'none';
+    document.getElementById('game-question-section').classList.add('active');
+    showCountdown(() => {
+      enterQuestionState(text, options, index, total, timeLimit);
+    });
   });
 
-  socket.on('player:answer:result', () => {
-    // track answered count (broadcast doesn't come here — we track via player count proxy)
-  });
+  socket.on('player:answer:result', () => {});
 
   socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
     pendingRanking = ranking;
-    // count answered = sum of tally
     answeredPlayers = tally.reduce((a, b) => a + b, 0);
-    enterRevealState(correctIndex);
+    enterRevealState(correctIndex, tally);
   });
 
   socket.on('game:finished', ({ ranking }) => {
@@ -634,6 +734,7 @@ function connectSocket(code) {
     document.getElementById('q-timer-text').style.display = 'none';
     document.getElementById('answered-count').style.display = 'none';
     document.getElementById('ranking-preview').style.display = 'none';
+    document.getElementById('correct-banner').style.display = 'none';
     setButtons(false, false, true);
     showFinalRanking(ranking);
   });
@@ -649,7 +750,7 @@ function connectSocket(code) {
 function verRanking() { enterRankingState(); }
 function siguientePregunta() { if (socket) socket.emit('admin:next'); }
 
-function showRanking(ranking, isFinal) {
+function showRanking(ranking) {
   const medals = ['🥇','🥈','🥉','4°','5°'];
   const maxScore = ranking[0]?.score || 1;
   const el = document.getElementById('ranking-preview');
@@ -700,33 +801,65 @@ function showFinalRanking(ranking) {
             </div>
           </div>`;
       }).join('')}
+      <div class="podium-wrap" id="podium-wrap" style="display:none;opacity:0;transform:translateY(30px)"></div>
     </div>
   `;
 
-  // Reveal from last place to 2nd, then suspense for 1st
-  const delays = top5.length > 1
-    ? top5.slice(1).map((_, i) => 600 + (top5.length - 2 - i) * 1200)
-    : [];
-
-  // reveal positions from bottom (index top5.length-1) to 1 first
   for (let i = top5.length - 1; i >= 1; i--) {
     const delay = 600 + (top5.length - 1 - i) * 1200;
     setTimeout(() => revealRankRow(i, maxScore, top5[i].score), delay);
   }
 
-  // suspense message before 1st place
   const suspenseDelay = 600 + (top5.length - 1) * 1200;
   setTimeout(() => {
     const msg = document.getElementById('suspense-msg');
     if (msg) { msg.textContent = '🥁 Y el ganador es...'; msg.classList.add('show'); }
   }, suspenseDelay);
 
-  // reveal 1st place
   setTimeout(() => {
     const msg = document.getElementById('suspense-msg');
     if (msg) msg.classList.remove('show');
     revealRankRow(0, maxScore, top5[0].score);
   }, suspenseDelay + 2200);
+
+  const podiumDelay = suspenseDelay + 2200 + 600;
+  setTimeout(() => buildPodium(top5), podiumDelay);
+}
+
+function buildPodium(top5) {
+  if (top5.length < 1) return;
+  const wrap = document.getElementById('podium-wrap');
+  if (!wrap) return;
+
+  const p1 = top5[0];
+  const p2 = top5[1] || null;
+  const p3 = top5[2] || null;
+
+  const colHtml = (player, medalClass, label) => {
+    if (!player) return `<div class="podium-col"></div>`;
+    return `
+      <div class="podium-col">
+        <div class="podium-name">${player.name}</div>
+        <div class="podium-score">${player.score.toLocaleString()} pts</div>
+        <div class="podium-base ${medalClass}">${label}</div>
+      </div>
+    `;
+  };
+
+  wrap.style.display = 'flex';
+  wrap.innerHTML = `
+    ${colHtml(p2, 'silver', '🥈')}
+    ${colHtml(p1, 'gold', '🥇')}
+    ${colHtml(p3, 'bronze', '🥉')}
+  `;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      wrap.style.opacity = '1';
+      wrap.style.transform = 'translateY(0)';
+      wrap.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+    });
+  });
 }
 
 function revealRankRow(idx, maxScore, score) {
@@ -739,7 +872,6 @@ function revealRankRow(idx, maxScore, score) {
   }, 100);
 }
 
-// ── Import from text ────────────────────────────────────────────────────────
 function toggleImport() {
   const box = document.getElementById('import-box');
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
@@ -776,7 +908,6 @@ function importQuestions() {
   }
 }
 
-// Init
 loadQuizzes();
 </script>
 </body>
