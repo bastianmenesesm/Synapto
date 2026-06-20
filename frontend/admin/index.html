@@ -909,6 +909,9 @@ function importQuestions() {
 }
 
 loadQuizzes();
+
+// Keep Railway awake — ping every 4 min to prevent cold starts for players
+setInterval(() => fetch(API + '/health').catch(() => {}), 4 * 60 * 1000);
 </script>
 </body>
 </html>

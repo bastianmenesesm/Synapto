@@ -176,6 +176,31 @@
     </div>
   </div>
 
+  <!-- STARTED screen (joined late) -->
+  <div id="s-started" class="hidden">
+    <div class="logo"><h1>Synapto</h1></div>
+    <div class="card" style="text-align:center;padding:32px">
+      <div style="font-size:48px">🔒</div>
+      <p style="font-size:18px;font-weight:700;margin-top:12px">El juego ya comenzó</p>
+      <p style="font-size:14px;color:var(--muted);margin-top:8px">Pedile al admin el código del próximo juego.</p>
+    </div>
+  </div>
+
+  <!-- DISCONNECTED screen -->
+  <div id="s-disconnected" class="hidden">
+    <div class="logo"><h1>Synapto</h1></div>
+    <div class="card" style="text-align:center;padding:32px">
+      <div style="font-size:48px">📡</div>
+      <p style="font-size:18px;font-weight:700;margin-top:12px">Reconectando…</p>
+      <p style="font-size:14px;color:var(--muted);margin-top:8px">No te muevas, volvemos enseguida.</p>
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:center;gap:8px">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s 0s infinite ease-in-out"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .2s infinite ease-in-out"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .4s infinite ease-in-out"></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -191,27 +216,51 @@ const urlCode = new URLSearchParams(window.location.search).get('code');
 if (urlCode) document.getElementById('inp-code').value = urlCode.toUpperCase();
 
 function show(id) {
-  ['s-join','s-lobby','s-question','s-wait','s-result','s-final'].forEach(s =>
+  ['s-join','s-lobby','s-question','s-wait','s-result','s-final','s-started','s-disconnected'].forEach(s =>
     document.getElementById(s).classList.add('hidden')
   );
   document.getElementById(id).classList.remove('hidden');
 }
+
+let savedCode = '';
 
 function joinGame() {
   const code = document.getElementById('inp-code').value.trim().toUpperCase();
   const name = document.getElementById('inp-name').value.trim();
   if (!code || !name) { showError('Completá el código y tu nombre'); return; }
 
+  savedCode = code;
+  myName = name;
+  connectSocket(code, name);
+}
+
+function connectSocket(code, name) {
+  if (socket) socket.disconnect();
   socket = io(API);
   socket.emit('player:join', { code, name });
-  myName = name;
+
+  socket.on('connect', () => {
+    if (savedCode && myName && document.getElementById('s-disconnected') &&
+        !document.getElementById('s-disconnected').classList.contains('hidden')) {
+      socket.emit('player:join', { code: savedCode, name: myName });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    const active = ['s-lobby','s-question','s-wait','s-result'];
+    const anyActive = active.some(id => !document.getElementById(id).classList.contains('hidden'));
+    if (anyActive) show('s-disconnected');
+  });
 
   socket.on('player:joined', ({ name }) => {
     document.getElementById('lobby-name').textContent = `Jugás como: ${name}`;
     show('s-lobby');
   });
 
-  socket.on('error', (msg) => { showError(msg); if (socket) socket.disconnect(); });
+  socket.on('error', (msg) => {
+    if (msg === 'El juego ya comenzó') { show('s-started'); if (socket) socket.disconnect(); return; }
+    showError(msg); if (socket) socket.disconnect();
+  });
 
   socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
     currentTimeLimit = timeLimit;
