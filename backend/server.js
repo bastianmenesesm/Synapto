@@ -568,10 +568,19 @@ io.on('connection', (socket) => {
     socket.emit('screen:state', payload);
   });
 
-  socket.on('admin:next', () => {
+  socket.on('admin:next', ({ token } = {}) => {
     const code = socket.gameCode;
     const game = games[code];
-    if (!game || socket.role !== 'admin') return;
+    if (!game) return;
+    if (socket.role !== 'admin') {
+      if (!token) return;
+      try {
+        const u = jwt.verify(token, JWT_SECRET);
+        const quiz = db.prepare('SELECT user_id FROM quizzes WHERE id = ?').get(game.quizId);
+        const dbUser = db.prepare('SELECT role FROM users WHERE id = ?').get(u.id);
+        if (quiz?.user_id !== u.id && dbUser?.role !== 'admin') return;
+      } catch { return; }
+    }
     if (game.status === 'countdown') return; // already counting down
 
     const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(game.quizId);
@@ -713,10 +722,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('admin:reveal', () => {
+  socket.on('admin:reveal', ({ token } = {}) => {
     const code = socket.gameCode;
     const game = games[code];
-    if (!game || socket.role !== 'admin') return;
+    if (!game) return;
+    if (socket.role !== 'admin') {
+      if (!token) return;
+      try {
+        const u = jwt.verify(token, JWT_SECRET);
+        const quiz = db.prepare('SELECT user_id FROM quizzes WHERE id = ?').get(game.quizId);
+        const dbUser = db.prepare('SELECT role FROM users WHERE id = ?').get(u.id);
+        if (quiz?.user_id !== u.id && dbUser?.role !== 'admin') return;
+      } catch { return; }
+    }
     clearInterval(game.questionTimer);
     const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(game.quizId);
     const q = questions[game.currentQuestion];

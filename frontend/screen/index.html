@@ -39,13 +39,34 @@
     .header h1 { font-size: 22px; font-weight: 900; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.5px; }
     .header-right { display: flex; align-items: center; gap: 16px; }
 
-    .theme-btn {
+    .hdr-btn {
       background: var(--surface); border: 1px solid var(--border); color: var(--text);
       border-radius: 8px; width: 36px; height: 36px; font-size: 18px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: background .2s;
+      transition: background .2s, transform .15s;
     }
-    .theme-btn:hover { background: var(--accent); color: #fff; }
+    .hdr-btn:hover { background: var(--accent); color: #fff; transform: scale(1.08); }
+    .theme-btn { /* alias */ }
+
+    /* Presenter bar */
+    .presenter-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 600;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      padding: 10px 20px; background: rgba(13,13,26,.88);
+      border-top: 1px solid var(--border); backdrop-filter: blur(10px);
+    }
+    [data-theme="light"] .presenter-bar { background: rgba(255,255,255,.88); }
+    .presenter-bar.hidden { display: none !important; }
+    .presenter-btn {
+      padding: 10px 24px; border-radius: 10px; border: none; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: background .15s, transform .1s; display: flex; align-items: center; gap: 8px;
+    }
+    .presenter-btn:active { transform: scale(.96); }
+    .presenter-btn-next { background: var(--accent); color: #fff; }
+    .presenter-btn-next:hover { background: #6a4de8; }
+    .presenter-btn-reveal { background: var(--accent2); color: #fff; }
+    .presenter-btn-reveal:hover { filter: brightness(.9); }
+    .presenter-label { font-size: 12px; color: var(--muted); letter-spacing: .5px; }
 
     .spectator-badge {
       display: none; background: rgba(255,152,0,.15); border: 1px solid rgba(255,152,0,.4);
@@ -203,7 +224,9 @@
   <div id="q-counter-header" style="font-size:14px;color:var(--muted)"></div>
   <div class="header-right">
     <span class="spectator-badge" id="spectator-badge">👁 ESPECTADOR</span>
-    <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">☀️</button>
+    <button class="hdr-btn" id="music-btn" onclick="toggleMusic()" title="Música">🔊</button>
+    <button class="hdr-btn" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">☀️</button>
+    <button class="hdr-btn" id="fs-btn" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
     <div class="timer-ring" id="timer-ring" style="visibility:hidden">
       <svg width="64" height="64" viewBox="0 0 64 64">
         <circle class="bg" cx="32" cy="32" r="26"/>
@@ -269,6 +292,12 @@
 <div class="reaction-layer" id="reaction-layer"></div>
 <!-- Confetti layer -->
 <div class="confetti-layer" id="confetti-layer"></div>
+<!-- Presenter controls (visible only when ?token= is in URL) -->
+<div class="presenter-bar hidden" id="presenter-bar">
+  <span class="presenter-label">🎤 PRESENTADOR</span>
+  <button class="presenter-btn presenter-btn-reveal" id="presenter-reveal-btn" onclick="presenterReveal()">⚡ Revelar</button>
+  <button class="presenter-btn presenter-btn-next" id="presenter-next-btn" onclick="presenterNext()">Siguiente →</button>
+</div>
 
 <script>
 const API = SYNAPTO_CONFIG.backendUrl;
@@ -276,11 +305,67 @@ const code = new URLSearchParams(window.location.search).get('code');
 let currentQ = null;
 let timerLimit = 20;
 let isDark = true;
+let socket = null;
 
 function toggleTheme() {
   isDark = !isDark;
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
   document.getElementById('theme-btn').textContent = isDark ? '☀️' : '🌙';
+}
+
+// ── Fullscreen ──
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    document.getElementById('fs-btn').textContent = '✕';
+  } else {
+    document.exitFullscreen().catch(() => {});
+    document.getElementById('fs-btn').textContent = '⛶';
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const inFS = !!document.fullscreenElement;
+  document.getElementById('fs-btn').textContent = inFS ? '✕' : '⛶';
+});
+
+// ── Music ──
+let _audio = null;
+let _musicMuted = false;
+function _playTrack(src, loop = true) {
+  if (_audio) { _audio.pause(); _audio = null; }
+  _audio = new Audio(src);
+  _audio.loop = loop;
+  _audio.volume = _musicMuted ? 0 : 0.5;
+  _audio.play().catch(() => {});
+}
+function stopMusic() {
+  if (_audio) { _audio.pause(); _audio = null; }
+}
+function toggleMusic() {
+  _musicMuted = !_musicMuted;
+  if (_audio) _audio.volume = _musicMuted ? 0 : 0.5;
+  document.getElementById('music-btn').textContent = _musicMuted ? '🔇' : '🔊';
+}
+
+// ── Presenter mode ──
+const _presenterToken = new URLSearchParams(window.location.search).get('token');
+let _presenterGameState = 'lobby';
+if (_presenterToken) {
+  document.getElementById('presenter-bar').classList.remove('hidden');
+}
+function _updatePresenterButtons() {
+  const revealBtn = document.getElementById('presenter-reveal-btn');
+  const nextBtn = document.getElementById('presenter-next-btn');
+  revealBtn.style.display = _presenterGameState === 'question' ? '' : 'none';
+  nextBtn.style.display = (_presenterGameState === 'lobby' || _presenterGameState === 'results' || _presenterGameState === 'ranking') ? '' : 'none';
+  const isLast = nextBtn.dataset.isLast === '1';
+  nextBtn.textContent = isLast ? '🏆 Ver resultados' : 'Siguiente →';
+}
+function presenterNext() {
+  if (socket && _presenterToken) socket.emit('admin:next', { token: _presenterToken });
+}
+function presenterReveal() {
+  if (socket && _presenterToken) socket.emit('admin:reveal', { token: _presenterToken });
 }
 
 function show(id) {
@@ -297,13 +382,20 @@ function showSpectatorBadge() {
 if (!code) {
   document.querySelector('.content').innerHTML = '<p style="color:rgba(255,255,255,.4);font-size:24px">Sin código de sala. Abrí desde el panel admin.</p>';
 } else {
-  const socket = io(API);
+  socket = io(API);
   socket.emit('screen:join', { code });
 
   socket.on('screen:state', ({ status, joinUrl, players, currentQuestion, currentReveal, finalRanking, teamMode, teams }) => {
     document.getElementById('lobby-code').textContent = code;
     document.getElementById('lobby-url').textContent = joinUrl || '';
     updatePlayers(players, teamMode, teams);
+
+    _presenterGameState = status;
+    if (_presenterToken) _updatePresenterButtons();
+
+    if (status === 'lobby') _playTrack('../sounds/lobby.mp3');
+    else if (status === 'question') _playTrack('../sounds/question.mp3');
+    else if (status === 'finished') _playTrack('../sounds/victory.mp3', false);
 
     if (status === 'question' && currentQuestion) {
       showSpectatorBadge();
@@ -354,6 +446,12 @@ if (!code) {
 
   socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
     document.getElementById('screen-countdown').classList.add('hidden');
+    _playTrack('../sounds/question.mp3');
+    _presenterGameState = 'question';
+    if (_presenterToken) {
+      document.getElementById('presenter-next-btn').dataset.isLast = (index >= total - 1) ? '1' : '0';
+      _updatePresenterButtons();
+    }
     timerLimit = timeLimit;
     currentQ = { text, options };
     document.getElementById('q-progress').textContent = `Pregunta ${index + 1} de ${total}`;
@@ -394,6 +492,9 @@ if (!code) {
 
   socket.on('question:reveal', ({ correctIndex, tally, ranking, teamMode }) => {
     document.getElementById('timer-ring').style.visibility = 'hidden';
+    stopMusic();
+    _presenterGameState = 'results';
+    if (_presenterToken) _updatePresenterButtons();
     if (currentQ) renderReveal(correctIndex, tally, ranking, currentQ.text, currentQ.options, teamMode);
   });
 
@@ -401,6 +502,9 @@ if (!code) {
 
   socket.on('game:finished', ({ ranking, teamMode }) => {
     document.getElementById('timer-ring').style.visibility = 'hidden';
+    _playTrack('../sounds/victory.mp3', false);
+    _presenterGameState = 'finished';
+    if (_presenterToken) _updatePresenterButtons();
     renderFinal(ranking, teamMode);
   });
 }

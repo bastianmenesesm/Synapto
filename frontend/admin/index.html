@@ -1038,9 +1038,9 @@ async function loadQuizzes() {
         <button class="btn btn-primary btn-sm" onclick="openLaunchModal('${q.id}','${safeTitle}')">▶ Jugar</button>
         <button class="btn btn-ghost btn-sm" onclick="showQuizPreview('${q.id}','${safeTitle}')">👁 Previa</button>
         <button class="btn btn-ghost btn-sm" onclick="showQuizStats('${q.id}','${safeTitle}')">📊 Stats</button>
-        <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️</button>
-        <button class="btn btn-ghost btn-sm" onclick="duplicateQuiz('${q.id}')">📋</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}')">🗑️</button>
+        <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️ Editar</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateQuiz('${q.id}')">📋 Duplicar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}')">🗑️ Eliminar</button>
       </div>
     </div>
   `}).join('');
