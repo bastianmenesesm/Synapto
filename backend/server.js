@@ -4,10 +4,13 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const db = require('./db');
 
 const app = express();
 const server = http.createServer(app);
+const JWT_SECRET = process.env.JWT_SECRET || 'synapto_dev_secret_change_in_prod';
 
 const io = new Server(server, {
   cors: {
@@ -18,6 +21,70 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
+
+// ─── Auth middleware ──────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No autenticado' });
+  try {
+    req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+}
+
+// ─── Users table (ensure exists) ─────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// ─── Auth routes ──────────────────────────────────────────────────────────────
+
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name?.trim() || !email?.trim() || !password) return res.status(400).json({ error: 'Todos los campos son requeridos' });
+  if (password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email inválido' });
+
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
+  if (existing) return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
+
+  const id = uuidv4();
+  const hash = await bcrypt.hash(password, 12);
+  db.prepare('INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)').run(id, name.trim(), email.toLowerCase().trim(), hash);
+
+  const user = { id, name: name.trim(), email: email.toLowerCase().trim() };
+  const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
+
+  const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
+  if (!row) return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+
+  const valid = await bcrypt.compare(password, row.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+
+  const user = { id: row.id, name: row.name, email: row.email };
+  const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user });
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT id, name, email, created_at FROM users WHERE id = ?').get(req.user.id);
+  if (!row) return res.status(404).json({ error: 'Usuario no encontrado' });
+  res.json(row);
+});
 
 // ─── In-memory game state ────────────────────────────────────────────────────
 const games = {}; // gameCode → gameState
@@ -39,7 +106,7 @@ function createGameState(quizId) {
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // Get all quizzes
-app.get('/api/quizzes', (req, res) => {
+app.get('/api/quizzes', requireAuth, (req, res) => {
   const quizzes = db.prepare(`
     SELECT q.*, COUNT(qs.id) as question_count
     FROM quizzes q
@@ -51,7 +118,7 @@ app.get('/api/quizzes', (req, res) => {
 });
 
 // Get quiz with questions
-app.get('/api/quizzes/:id', (req, res) => {
+app.get('/api/quizzes/:id', requireAuth, (req, res) => {
   const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
   const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(quiz.id);
@@ -62,7 +129,7 @@ app.get('/api/quizzes/:id', (req, res) => {
 });
 
 // Create quiz
-app.post('/api/quizzes', (req, res) => {
+app.post('/api/quizzes', requireAuth, (req, res) => {
   const { title, questions } = req.body;
   if (!title || !questions?.length) return res.status(400).json({ error: 'Título y preguntas requeridos' });
 
@@ -81,7 +148,7 @@ app.post('/api/quizzes', (req, res) => {
 });
 
 // Update quiz
-app.put('/api/quizzes/:id', (req, res) => {
+app.put('/api/quizzes/:id', requireAuth, (req, res) => {
   const { title, questions } = req.body;
   const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
@@ -101,14 +168,14 @@ app.put('/api/quizzes/:id', (req, res) => {
 });
 
 // Delete quiz
-app.delete('/api/quizzes/:id', (req, res) => {
+app.delete('/api/quizzes/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
   db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
 // Create game session (returns game code + QR)
-app.post('/api/games', async (req, res) => {
+app.post('/api/games', requireAuth, async (req, res) => {
   const { quizId, baseUrl } = req.body;
   const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(quizId);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });

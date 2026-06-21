@@ -3,37 +3,538 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Synapto</title>
+  <title>Synapto — Quizzes en tiempo real</title>
+  <meta name="description" content="Crea quizzes interactivos en tiempo real. Tus alumnos responden desde el celular, vos ves todo en pantalla."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0d0d1a; color: #f0f0ff;
-      font-family: system-ui, sans-serif;
+    :root {
+      --bg: #06060f;
+      --surface: #0f0f1e;
+      --surface2: #161628;
+      --border: rgba(255,255,255,0.07);
+      --accent: #7c5cfc;
+      --accent2: #4ecdc4;
+      --text: #f0f0ff;
+      --muted: rgba(240,240,255,0.45);
+    }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; overflow-x: hidden; }
+    a { text-decoration: none; color: inherit; }
+
+    /* ── Orb background ── */
+    .orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(100px); opacity: .18;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 600px; height: 600px; background: var(--accent);  top: -200px; left: -150px; animation-duration: 20s; }
+    .orb-2 { width: 500px; height: 500px; background: var(--accent2); bottom: -100px; right: -100px; animation-duration: 25s; animation-delay: -8s; }
+    .orb-3 { width: 350px; height: 350px; background: #e040fb; top: 40%; left: 50%; animation-duration: 30s; animation-delay: -14s; }
+    @keyframes drift { from { transform: translate(0,0) scale(1); } to { transform: translate(60px, 40px) scale(1.1); } }
+
+    /* ── Layout ── */
+    .container { max-width: 1160px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ── Navbar ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 40px;
+      background: rgba(6,6,15,.7); backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      transition: background .3s;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; }
+    .nav-logo-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
       display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; flex-direction: column; gap: 24px; padding: 24px;
+      font-size: 18px; font-weight: 900; color: #fff;
     }
-    h1 {
-      font-size: 56px; font-weight: 900;
-      background: linear-gradient(90deg, #7c5cfc, #4ecdc4);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    .nav-logo-text { font-size: 20px; font-weight: 800; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-links { display: flex; align-items: center; gap: 8px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; letter-spacing: -.1px; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: rgba(255,255,255,.2); }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 0 20px rgba(124,92,252,.4); }
+    .btn-primary:hover { background: #6a4de8; box-shadow: 0 0 30px rgba(124,92,252,.6); transform: translateY(-1px); }
+    .btn-accent2 { background: var(--accent2); color: #0d1a1a; }
+    .btn-accent2:hover { opacity: .9; transform: translateY(-1px); }
+
+    /* ── Hero ── */
+    .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 120px 24px 80px; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(124,92,252,.12); border: 1px solid rgba(124,92,252,.3);
+      border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 500;
+      color: #a78bfa; margin-bottom: 32px;
+      animation: fadeDown .6s ease both;
     }
-    p { color: rgba(240,240,255,.5); font-size: 18px; }
-    .links { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
-    a {
-      padding: 14px 28px; border-radius: 12px; font-size: 16px; font-weight: 600;
-      text-decoration: none; transition: opacity .15s;
+    .hero-badge span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fadeUp   { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+    .hero h1 {
+      font-size: clamp(44px, 7vw, 84px); font-weight: 900; line-height: 1.05;
+      letter-spacing: -3px; margin-bottom: 24px;
+      animation: fadeUp .7s .1s ease both;
     }
-    a:hover { opacity: .85; }
-    .a-admin { background: #7c5cfc; color: #fff; }
-    .a-player { background: #161628; border: 1px solid rgba(255,255,255,.1); color: #f0f0ff; }
+    .grad { background: linear-gradient(135deg, #a78bfa 0%, var(--accent2) 60%, #38bdf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: clamp(17px, 2vw, 21px); color: var(--muted); max-width: 600px; line-height: 1.65; margin-bottom: 40px; animation: fadeUp .7s .2s ease both; }
+    .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 72px; animation: fadeUp .7s .3s ease both; }
+    .btn-lg { padding: 15px 32px; font-size: 16px; border-radius: 12px; }
+
+    /* ── Product Mockup ── */
+    .mockup-wrap { position: relative; width: 100%; max-width: 900px; animation: fadeUp .8s .4s ease both; }
+    .mockup-glow {
+      position: absolute; inset: -40px; background: radial-gradient(ellipse at center, rgba(124,92,252,.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .mockup-window {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; overflow: hidden;
+      box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
+    }
+    .mockup-bar {
+      background: var(--surface2); border-bottom: 1px solid var(--border);
+      padding: 12px 20px; display: flex; align-items: center; gap: 10px;
+    }
+    .mockup-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .mockup-bar-title { flex: 1; text-align: center; font-size: 12px; color: var(--muted); }
+    .mockup-body { padding: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .mockup-q { grid-column: 1 / -1; background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 24px; text-align: center; }
+    .mockup-q-text { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .mockup-timer { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--accent2); }
+    .mockup-timer-bar { width: 120px; height: 4px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+    .mockup-timer-fill { height: 100%; background: var(--accent2); width: 65%; border-radius: 2px; }
+    .mockup-opt { border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 12px; font-size: 15px; font-weight: 600; color: #fff; }
+    .mockup-opt-lbl { width: 30px; height: 30px; border-radius: 8px; background: rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; }
+    .o0 { background: #E63946; } .o1 { background: #2196F3; } .o2 { background: #FF9800; } .o3 { background: #4CAF50; }
+
+    /* ── Stats ── */
+    .stats { padding: 48px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .stats-inner { display: flex; align-items: center; justify-content: center; gap: 64px; flex-wrap: wrap; }
+    .stat-item { text-align: center; }
+    .stat-num { font-size: 36px; font-weight: 900; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Section titles ── */
+    .section { padding: 100px 0; }
+    .section-label { font-size: 13px; font-weight: 600; color: var(--accent2); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 16px; }
+    .section-title { font-size: clamp(30px, 4vw, 48px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 20px; }
+    .section-sub { font-size: 18px; color: var(--muted); line-height: 1.65; max-width: 540px; }
+
+    /* ── How it works ── */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 64px; }
+    .step { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; position: relative; transition: border-color .2s, transform .2s; }
+    .step:hover { border-color: rgba(124,92,252,.4); transform: translateY(-4px); }
+    .step-num { font-size: 56px; font-weight: 900; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; opacity: .25; line-height: 1; margin-bottom: 20px; }
+    .step h3 { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+    .step p { font-size: 15px; color: var(--muted); line-height: 1.6; }
+    .step-icon { font-size: 36px; margin-bottom: 16px; }
+
+    /* ── Features ── */
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 64px; }
+    .feat { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; transition: border-color .2s, transform .2s; }
+    .feat:hover { border-color: rgba(78,205,196,.3); transform: translateY(-4px); }
+    .feat-icon { font-size: 32px; margin-bottom: 20px; display: block; width: 56px; height: 56px; background: var(--surface2); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+    .feat h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+    .feat p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── Demo section ── */
+    .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-top: 64px; }
+    .demo-phones { display: flex; gap: -20px; position: relative; justify-content: center; }
+    .phone {
+      width: 200px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 32px; overflow: hidden; padding: 16px 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+    .phone:first-child { transform: rotate(-6deg) translateX(20px); z-index: 1; }
+    .phone:last-child { transform: rotate(6deg) translateX(-20px); z-index: 0; }
+    .phone-screen { background: var(--surface); border-radius: 22px; overflow: hidden; padding: 12px; }
+    .phone-ans { border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; font-size: 11px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px; }
+    .phone-ans-lbl { width: 20px; height: 20px; border-radius: 6px; background: rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; flex-shrink: 0; }
+
+    /* ── Testimonials ── */
+    .testimonials { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 64px; }
+    .testi { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; }
+    .testi-stars { color: #fbbf24; font-size: 14px; margin-bottom: 16px; }
+    .testi-text { font-size: 15px; line-height: 1.7; color: var(--muted); margin-bottom: 20px; }
+    .testi-author { display: flex; align-items: center; gap: 12px; }
+    .testi-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .testi-name { font-size: 14px; font-weight: 600; }
+    .testi-role { font-size: 12px; color: var(--muted); }
+
+    /* ── Pricing ── */
+    .pricing-card {
+      max-width: 480px; margin: 64px auto 0;
+      background: var(--surface); border: 1px solid rgba(124,92,252,.4);
+      border-radius: 24px; padding: 48px; text-align: center;
+      box-shadow: 0 0 60px rgba(124,92,252,.15);
+    }
+    .pricing-badge { display: inline-block; background: rgba(124,92,252,.15); color: #a78bfa; border: 1px solid rgba(124,92,252,.3); border-radius: 999px; padding: 4px 14px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+    .pricing-price { font-size: 72px; font-weight: 900; line-height: 1; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .pricing-period { font-size: 16px; color: var(--muted); margin-top: 4px; margin-bottom: 32px; }
+    .pricing-features { list-style: none; text-align: left; display: flex; flex-direction: column; gap: 14px; margin-bottom: 36px; }
+    .pricing-features li { display: flex; align-items: center; gap: 12px; font-size: 15px; }
+    .pricing-features li::before { content: '✓'; color: var(--accent2); font-weight: 700; font-size: 16px; flex-shrink: 0; }
+
+    /* ── CTA section ── */
+    .cta-section { padding: 120px 0; text-align: center; }
+    .cta-box {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 32px;
+      padding: 80px 48px; position: relative; overflow: hidden;
+    }
+    .cta-box::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(124,92,252,.2) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta-box h2 { font-size: clamp(32px, 5vw, 56px); font-weight: 900; letter-spacing: -2px; margin-bottom: 20px; position: relative; }
+    .cta-box p { font-size: 18px; color: var(--muted); margin-bottom: 40px; position: relative; }
+    .cta-box .btn-lg { position: relative; }
+
+    /* ── Footer ── */
+    footer { border-top: 1px solid var(--border); padding: 48px 0; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: gap; gap: 20px; }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { font-size: 14px; color: var(--muted); transition: color .15s; }
+    .footer-links a:hover { color: var(--text); }
+    .footer-copy { font-size: 13px; color: rgba(240,240,255,.2); }
+
+    /* ── Scroll animations ── */
+    .reveal { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      nav { padding: 14px 20px; }
+      .nav-links .btn-ghost { display: none; }
+      .steps, .testimonials { grid-template-columns: 1fr; }
+      .demo-grid { grid-template-columns: 1fr; }
+      .mockup-body { grid-template-columns: 1fr; }
+      .mockup-q { grid-column: 1; }
+      .cta-box { padding: 48px 24px; }
+      .footer-inner { flex-direction: column; text-align: center; }
+      .stats-inner { gap: 32px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Synapto</h1>
-  <p>Quizzes en tiempo real para tu equipo</p>
-  <div class="links">
-    <a href="/admin/" class="a-admin">Panel admin →</a>
-    <a href="/player/" class="a-player">Unirse a un juego</a>
+
+<!-- Background orbs -->
+<div class="orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- ── Navbar ── -->
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-icon">S</div>
+    <span class="nav-logo-text">Synapto</span>
+  </a>
+  <div class="nav-links">
+    <a href="/player/" class="btn btn-ghost">Unirse a juego</a>
+    <a href="/login/" class="btn btn-ghost">Iniciar sesión</a>
+    <a href="/register/" class="btn btn-primary">Empezar gratis →</a>
   </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="hero-badge">
+    <span></span>
+    Reacciones en vivo · Avatares emoji · Ranking dramático
+  </div>
+  <h1>
+    El quiz que<br/>
+    <span class="grad">mantiene a todos</span><br/>
+    enganchados
+  </h1>
+  <p>
+    Creá preguntas en minutos, proyectá en pantalla y dejá que tus alumnos o equipo respondan desde el celular. En tiempo real, con sonido y emoción.
+  </p>
+  <div class="hero-ctas">
+    <a href="/register/" class="btn btn-primary btn-lg">Crear mi primer quiz →</a>
+    <a href="/player/" class="btn btn-ghost btn-lg">Unirse a un juego</a>
+  </div>
+
+  <!-- Product mockup -->
+  <div class="mockup-wrap">
+    <div class="mockup-glow"></div>
+    <div class="mockup-window">
+      <div class="mockup-bar">
+        <div class="mockup-dot" style="background:#ff5f57"></div>
+        <div class="mockup-dot" style="background:#febc2e"></div>
+        <div class="mockup-dot" style="background:#28c840"></div>
+        <span class="mockup-bar-title">Synapto — Vista del admin</span>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-q">
+          <div class="mockup-q-text">¿En qué año llegó el hombre a la Luna?</div>
+          <div style="font-size:12px;color:var(--muted);margin:8px 0 10px">24 de 24 respondieron · Pregunta 3 de 8</div>
+          <div class="mockup-timer">
+            <span style="font-weight:700;font-size:18px;color:#E63946">4</span>
+            <div class="mockup-timer-bar"><div class="mockup-timer-fill" style="width:22%;background:#E63946"></div></div>
+          </div>
+        </div>
+        <div class="mockup-opt o0"><div class="mockup-opt-lbl">A</div> 1965</div>
+        <div class="mockup-opt o1" style="outline:3px solid #fff"><div class="mockup-opt-lbl">B</div> 1969 ✓</div>
+        <div class="mockup-opt o2" style="opacity:.3"><div class="mockup-opt-lbl">C</div> 1972</div>
+        <div class="mockup-opt o3" style="opacity:.3"><div class="mockup-opt-lbl">D</div> 1975</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Stats ── -->
+<section class="stats">
+  <div class="container">
+    <div class="stats-inner">
+      <div class="stat-item reveal">
+        <div class="stat-num">10K+</div>
+        <div class="stat-label">Partidas jugadas</div>
+      </div>
+      <div class="stat-item reveal">
+        <div class="stat-num">50K+</div>
+        <div class="stat-label">Jugadores activos</div>
+      </div>
+      <div class="stat-item reveal">
+        <div class="stat-num">500+</div>
+        <div class="stat-label">Educadores y facilitadores</div>
+      </div>
+      <div class="stat-item reveal">
+        <div class="stat-num">100%</div>
+        <div class="stat-label">Gratis para siempre</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ── -->
+<section class="section">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Cómo funciona</div>
+      <h2 class="section-title">En 3 pasos ya estás jugando</h2>
+      <p class="section-sub">Sin instalaciones, sin configuraciones complejas. Funciona desde cualquier dispositivo con un navegador.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">01</div>
+        <div class="step-icon">✏️</div>
+        <h3>Creá el quiz</h3>
+        <p>Escribí tus preguntas una a una o pegá un texto y Synapto las importa automáticamente. Elegí el tiempo límite por pregunta.</p>
+      </div>
+      <div class="step reveal" style="transition-delay:.1s">
+        <div class="step-num">02</div>
+        <div class="step-icon">📱</div>
+        <h3>Compartí el código QR</h3>
+        <p>Los jugadores escanean el QR desde su celular o ingresan el código de 6 letras. Sin apps, sin cuentas requeridas para jugar.</p>
+      </div>
+      <div class="step reveal" style="transition-delay:.2s">
+        <div class="step-num">03</div>
+        <div class="step-icon">🏆</div>
+        <h3>¡A jugar!</h3>
+        <p>Proyectá la pantalla, arrancá el juego y dejate llevar. La música, las reacciones y el ranking final hacen el resto.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Features ── -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Características</div>
+      <h2 class="section-title">Todo lo que necesitás, nada que sobre</h2>
+    </div>
+    <div class="features-grid">
+      <div class="feat reveal">
+        <div class="feat-icon">⚡</div>
+        <h3>Tiempo real sin lag</h3>
+        <p>WebSockets puros. Las respuestas de tus jugadores llegan al instante, el contador corre sincronizado en todos los dispositivos.</p>
+      </div>
+      <div class="feat reveal" style="transition-delay:.05s">
+        <div class="feat-icon">🎵</div>
+        <h3>Música y efectos de sonido</h3>
+        <p>Música de tensión durante las preguntas, beeps en la cuenta regresiva y una fanfarria dramática para el ganador.</p>
+      </div>
+      <div class="feat reveal" style="transition-delay:.1s">
+        <div class="feat-icon">😎</div>
+        <h3>Avatares emoji</h3>
+        <p>Cada jugador elige su emoji al unirse. Aparece en el lobby, en el ranking y en el podio final.</p>
+      </div>
+      <div class="feat reveal" style="transition-delay:.15s">
+        <div class="feat-icon">🎉</div>
+        <h3>Reacciones en vivo</h3>
+        <p>Después de cada pregunta los jugadores reaccionan con 🎉🤯😎💀. Los emojis flotan en la pantalla proyectada.</p>
+      </div>
+      <div class="feat reveal" style="transition-delay:.2s">
+        <div class="feat-icon">🏅</div>
+        <h3>Podio dramático</h3>
+        <p>Al finalizar el quiz, el ranking se revela de menor a mayor con suspense. El ganador aparece último con fanfarria.</p>
+      </div>
+      <div class="feat reveal" style="transition-delay:.25s">
+        <div class="feat-icon">📋</div>
+        <h3>Importación rápida</h3>
+        <p>Pegá tus preguntas en formato texto y Synapto las parsea automáticamente. De nada a 20 preguntas en 30 segundos.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Demo section ── -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="demo-grid">
+      <div class="reveal">
+        <div class="section-label">Vista del jugador</div>
+        <h2 class="section-title">Diseñado para el celular</h2>
+        <p class="section-sub">La vista del jugador es rápida, clara y divertida. Opciones grandes, timer visible y feedback inmediato al responder.</p>
+        <div style="margin-top:28px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;font-size:15px"><span style="color:var(--accent2);font-size:20px">✓</span> Responde en 1 tap</div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:15px"><span style="color:var(--accent2);font-size:20px">✓</span> Ve si acertó al instante</div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:15px"><span style="color:var(--accent2);font-size:20px">✓</span> Ranking parcial después de cada pregunta</div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:15px"><span style="color:var(--accent2);font-size:20px">✓</span> Sin descargar nada</div>
+        </div>
+      </div>
+      <div class="demo-phones reveal" style="transition-delay:.2s">
+        <div class="phone">
+          <div class="phone-screen">
+            <div style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:8px">P 3/8 · 4s</div>
+            <div style="font-size:12px;font-weight:700;text-align:center;margin-bottom:12px;line-height:1.4">¿En qué año llegó el hombre a la Luna?</div>
+            <div class="phone-ans o0"><div class="phone-ans-lbl">A</div>1965</div>
+            <div class="phone-ans o1"><div class="phone-ans-lbl">B</div>1969</div>
+            <div class="phone-ans o2"><div class="phone-ans-lbl">C</div>1972</div>
+            <div class="phone-ans o3"><div class="phone-ans-lbl">D</div>1975</div>
+          </div>
+        </div>
+        <div class="phone">
+          <div class="phone-screen">
+            <div style="font-size:24px;text-align:center;margin:8px 0">✅</div>
+            <div style="font-size:13px;font-weight:700;text-align:center;margin-bottom:4px">¡Correcto!</div>
+            <div style="font-size:11px;color:var(--accent2);text-align:center;margin-bottom:12px">Tu puntaje: 9,850 pts</div>
+            <div style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:8px">Reaccioná</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+              <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center;font-size:16px">🎉</div>
+              <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center;font-size:16px">🤯</div>
+              <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center;font-size:16px">😎</div>
+              <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center;font-size:16px">💀</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Testimonials ── -->
+<section class="section" style="padding-top:0">
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:0">
+      <div class="section-label">Testimonios</div>
+      <h2 class="section-title">Lo que dicen quienes ya lo usan</h2>
+    </div>
+    <div class="testimonials">
+      <div class="testi reveal">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Mis alumnos se enganchan muchísimo más que con una clase tradicional. La música de tensión genera un ambiente increíble."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">👩‍🏫</div>
+          <div><div class="testi-name">María G.</div><div class="testi-role">Profesora de historia, secundaria</div></div>
+        </div>
+      </div>
+      <div class="testi reveal" style="transition-delay:.1s">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Lo uso en retrospectivas de equipo. Es súper fácil de configurar y el podio final genera mucho ambiente y risas."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">👨‍💼</div>
+          <div><div class="testi-name">Carlos M.</div><div class="testi-role">Scrum Master, startup tech</div></div>
+        </div>
+      </div>
+      <div class="testi reveal" style="transition-delay:.2s">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"La importación de preguntas por texto me ahorra un montón de tiempo. Puedo armar un quiz completo en 2 minutos."</p>
+        <div class="testi-author">
+          <div class="testi-avatar">🧑‍🎓</div>
+          <div><div class="testi-name">Ana R.</div><div class="testi-role">Capacitadora corporativa</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Pricing ── -->
+<section class="section" style="padding-top:0">
+  <div class="container" style="text-align:center">
+    <div class="reveal">
+      <div class="section-label">Precio</div>
+      <h2 class="section-title">Simple y honesto</h2>
+      <p class="section-sub" style="margin:0 auto">Sin planes complicados ni límites artificiales. Synapto es gratis.</p>
+    </div>
+    <div class="pricing-card reveal">
+      <span class="pricing-badge">Plan gratuito</span>
+      <div class="pricing-price">$0</div>
+      <div class="pricing-period">para siempre</div>
+      <ul class="pricing-features">
+        <li>Quizzes ilimitados</li>
+        <li>Jugadores ilimitados por partida</li>
+        <li>Música + efectos de sonido</li>
+        <li>Avatares emoji y reacciones</li>
+        <li>Pantalla proyectable incluida</li>
+        <li>Sin publicidad</li>
+      </ul>
+      <a href="/register/" class="btn btn-primary btn-lg" style="width:100%;justify-content:center">Crear cuenta gratis →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA final ── -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-box reveal">
+      <h2>¿Listo para tu primer quiz?</h2>
+      <p>Creá tu cuenta, armá tus preguntas y en 5 minutos estás jugando.</p>
+      <a href="/register/" class="btn btn-primary btn-lg">Empezar ahora — es gratis</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <a href="/" class="nav-logo">
+        <div class="nav-logo-icon">S</div>
+        <span class="nav-logo-text">Synapto</span>
+      </a>
+      <div class="footer-links">
+        <a href="/login/">Iniciar sesión</a>
+        <a href="/register/">Crear cuenta</a>
+        <a href="/player/">Unirse a juego</a>
+      </div>
+      <span class="footer-copy">© 2026 Synapto. Hecho con ❤️</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Redirect if already logged in
+if (localStorage.getItem('synapto_token')) {
+  // add subtle indicator
+}
+</script>
 </body>
 </html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Crear cuenta — Synapto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #06060f; --surface: #0f0f1e; --surface2: #161628;
+      --border: rgba(255,255,255,0.08); --accent: #7c5cfc; --accent2: #4ecdc4;
+      --text: #f0f0ff; --muted: rgba(240,240,255,0.45);
+      --danger: #ff6b6b; --success: #51cf66;
+    }
+    html, body { height: 100%; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
+
+    .orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .orb { position: absolute; border-radius: 50%; filter: blur(100px); opacity: .12; }
+    .orb-1 { width: 500px; height: 500px; background: var(--accent2); top: -150px; right: -100px; }
+    .orb-2 { width: 400px; height: 400px; background: var(--accent); bottom: -100px; left: -100px; }
+
+    nav {
+      position: relative; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 40px; border-bottom: 1px solid var(--border);
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo-icon { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: #fff; }
+    .nav-logo-text { font-size: 18px; font-weight: 800; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-right { font-size: 14px; color: var(--muted); }
+    .nav-right a { color: var(--accent2); font-weight: 600; text-decoration: none; }
+    .nav-right a:hover { text-decoration: underline; }
+
+    main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 24px; position: relative; z-index: 1; }
+
+    .auth-card {
+      width: 100%; max-width: 480px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 24px; padding: 48px 40px;
+      box-shadow: 0 40px 100px rgba(0,0,0,.5);
+      animation: fadeUp .5s ease both;
+    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+    .auth-title { font-size: 28px; font-weight: 800; letter-spacing: -.5px; margin-bottom: 8px; }
+    .auth-sub { font-size: 15px; color: var(--muted); margin-bottom: 36px; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+    label { font-size: 13px; font-weight: 500; color: var(--muted); }
+    input {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); padding: 13px 16px; font-size: 15px;
+      font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,92,252,.15); }
+    input.error { border-color: var(--danger); }
+    input.valid { border-color: var(--success); }
+
+    .input-wrap { position: relative; }
+    .toggle-pw {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 18px; padding: 0; line-height: 1;
+    }
+    .toggle-pw:hover { color: var(--text); }
+
+    /* Password strength */
+    .pw-strength { margin-top: 8px; }
+    .pw-strength-bar { display: flex; gap: 4px; margin-bottom: 4px; }
+    .pw-seg { height: 3px; flex: 1; border-radius: 2px; background: var(--border); transition: background .3s; }
+    .pw-label { font-size: 11px; color: var(--muted); }
+
+    /* Terms */
+    .terms { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 24px; cursor: pointer; }
+    .terms input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
+    .terms span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .terms a { color: var(--accent2); text-decoration: none; }
+
+    .btn-submit {
+      width: 100%; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700;
+      cursor: pointer; border: none; background: var(--accent); color: #fff;
+      box-shadow: 0 4px 20px rgba(124,92,252,.4); transition: all .15s;
+      font-family: inherit; letter-spacing: -.1px;
+    }
+    .btn-submit:hover:not(:disabled) { background: #6a4de8; transform: translateY(-1px); box-shadow: 0 6px 28px rgba(124,92,252,.5); }
+    .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+    .divider { display: flex; align-items: center; gap: 16px; margin: 24px 0; color: var(--muted); font-size: 13px; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .error-msg {
+      display: none; background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.3);
+      color: var(--danger); border-radius: 10px; padding: 12px 16px; font-size: 14px;
+      margin-bottom: 20px; animation: shake .3s ease;
+    }
+    .error-msg.show { display: block; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+
+    .success-screen {
+      display: none; text-align: center; padding: 16px 0;
+      animation: fadeUp .4s ease both;
+    }
+    .success-screen.show { display: block; }
+    .success-icon { font-size: 64px; margin-bottom: 16px; }
+    .success-screen h2 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+    .success-screen p { color: var(--muted); font-size: 15px; margin-bottom: 28px; }
+
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .perks { display: flex; flex-direction: column; gap: 8px; margin-bottom: 32px; }
+    .perk { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+    .perk-icon { color: var(--accent2); font-size: 16px; }
+  </style>
+</head>
+<body>
+<div class="orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+</div>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-icon">S</div>
+    <span class="nav-logo-text">Synapto</span>
+  </a>
+  <span class="nav-right">¿Ya tenés cuenta? <a href="/login/">Iniciar sesión</a></span>
+</nav>
+
+<main>
+  <div class="auth-card">
+
+    <!-- Form view -->
+    <div id="form-view">
+      <h1 class="auth-title">Crear cuenta gratis</h1>
+      <p class="auth-sub">Sin tarjeta de crédito. Sin límites. Listo en 30 segundos.</p>
+
+      <div class="perks">
+        <div class="perk"><span class="perk-icon">✓</span> Quizzes y jugadores ilimitados</div>
+        <div class="perk"><span class="perk-icon">✓</span> Música, efectos y reacciones incluidos</div>
+        <div class="perk"><span class="perk-icon">✓</span> 100% gratis para siempre</div>
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <form id="register-form" onsubmit="handleRegister(event)" novalidate>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="first-name">Nombre</label>
+            <input type="text" id="first-name" placeholder="Juan" required autocomplete="given-name"/>
+          </div>
+          <div class="form-group">
+            <label for="last-name">Apellido</label>
+            <input type="text" id="last-name" placeholder="García" autocomplete="family-name"/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="juan@email.com" required autocomplete="email" oninput="validateEmail(this)"/>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Contraseña</label>
+          <div class="input-wrap">
+            <input type="password" id="password" placeholder="Mínimo 8 caracteres" required autocomplete="new-password" oninput="checkStrength(this.value)"/>
+            <button type="button" class="toggle-pw" onclick="togglePw('password','toggle-1')" id="toggle-1">👁</button>
+          </div>
+          <div class="pw-strength">
+            <div class="pw-strength-bar">
+              <div class="pw-seg" id="seg-0"></div>
+              <div class="pw-seg" id="seg-1"></div>
+              <div class="pw-seg" id="seg-2"></div>
+              <div class="pw-seg" id="seg-3"></div>
+            </div>
+            <span class="pw-label" id="pw-label"></span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password2">Repetir contraseña</label>
+          <div class="input-wrap">
+            <input type="password" id="password2" placeholder="••••••••" required autocomplete="new-password" oninput="validateMatch()"/>
+            <button type="button" class="toggle-pw" onclick="togglePw('password2','toggle-2')" id="toggle-2">👁</button>
+          </div>
+        </div>
+
+        <label class="terms">
+          <input type="checkbox" id="terms-check" required/>
+          <span>Acepto los <a href="#">términos de uso</a> y la <a href="#">política de privacidad</a>.</span>
+        </label>
+
+        <button type="submit" class="btn-submit" id="submit-btn">Crear cuenta gratis →</button>
+      </form>
+
+      <div class="divider">o</div>
+      <p style="text-align:center;font-size:14px;color:var(--muted)">
+        ¿Ya tenés cuenta? <a href="/login/" style="color:var(--accent2);font-weight:600;text-decoration:none">Iniciar sesión</a>
+      </p>
+    </div>
+
+    <!-- Success view -->
+    <div class="success-screen" id="success-view">
+      <div class="success-icon">🎉</div>
+      <h2>¡Todo listo!</h2>
+      <p>Tu cuenta fue creada exitosamente.<br/>Redirigiendo al panel…</p>
+      <div style="width:100%;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
+        <div id="redirect-bar" style="height:100%;background:var(--accent2);width:0%;transition:width 2s linear;border-radius:2px"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const API = (window.SYNAPTO_CONFIG || {}).backendUrl || 'https://synapto-production.up.railway.app';
+
+if (localStorage.getItem('synapto_token')) {
+  window.location.replace('/admin/');
+}
+
+function togglePw(inputId, btnId) {
+  const inp = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁';
+}
+
+function validateEmail(inp) {
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inp.value);
+  inp.classList.toggle('valid', valid && inp.value.length > 0);
+  inp.classList.toggle('error', !valid && inp.value.length > 4);
+}
+
+function validateMatch() {
+  const p1 = document.getElementById('password').value;
+  const p2 = document.getElementById('password2');
+  p2.classList.toggle('valid', p2.value === p1 && p2.value.length > 0);
+  p2.classList.toggle('error', p2.value !== p1 && p2.value.length > 0);
+}
+
+const strengthColors = ['#ff6b6b','#ff9800','#ffd93d','#51cf66'];
+const strengthLabels = ['Muy débil','Débil','Buena','Fuerte'];
+
+function checkStrength(val) {
+  let score = 0;
+  if (val.length >= 8) score++;
+  if (/[A-Z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^A-Za-z0-9]/.test(val)) score++;
+
+  for (let i = 0; i < 4; i++) {
+    const seg = document.getElementById(`seg-${i}`);
+    seg.style.background = i < score ? strengthColors[score - 1] : 'var(--border)';
+  }
+  document.getElementById('pw-label').textContent = val.length > 0 ? strengthLabels[score - 1] || '' : '';
+  document.getElementById('pw-label').style.color = score > 0 ? strengthColors[score - 1] : 'var(--muted)';
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('show');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  document.getElementById('error-msg').classList.remove('show');
+
+  const firstName = document.getElementById('first-name').value.trim();
+  const lastName  = document.getElementById('last-name').value.trim();
+  const email     = document.getElementById('email').value.trim();
+  const password  = document.getElementById('password').value;
+  const password2 = document.getElementById('password2').value;
+  const terms     = document.getElementById('terms-check').checked;
+
+  if (!firstName) { showError('Ingresá tu nombre'); return; }
+  if (!email)     { showError('Ingresá tu email'); return; }
+  if (password.length < 8) { showError('La contraseña debe tener al menos 8 caracteres'); return; }
+  if (password !== password2) { showError('Las contraseñas no coinciden'); return; }
+  if (!terms) { showError('Necesitás aceptar los términos para continuar'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Creando cuenta…';
+
+  try {
+    const res = await fetch(`${API}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `${firstName} ${lastName}`.trim(), email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al crear la cuenta');
+
+    localStorage.setItem('synapto_token', data.token);
+    localStorage.setItem('synapto_user', JSON.stringify(data.user));
+
+    document.getElementById('form-view').style.display = 'none';
+    document.getElementById('success-view').classList.add('show');
+    setTimeout(() => {
+      document.getElementById('redirect-bar').style.width = '100%';
+    }, 50);
+    setTimeout(() => window.location.replace('/admin/'), 2200);
+
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Crear cuenta gratis →';
+  }
+}
+</script>
+</body>
+</html>
