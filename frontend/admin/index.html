@@ -4,6 +4,9 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Synapto — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script>(function(){const t=localStorage.getItem('synapto-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script src="../config.js"></script>
   <style>
@@ -180,6 +183,51 @@
     .podium-base.gold { background: #FFD70022; border: 2px solid #FFD700; height: 110px; }
     .podium-base.silver { background: #C0C0C022; border: 2px solid #C0C0C0; height: 80px; }
     .podium-base.bronze { background: #CD7F3222; border: 2px solid #CD7F32; height: 60px; }
+
+    /* ─── Visual improvements ───────────────────────────────────── */
+    .quiz-card { transition: border-color .2s, transform .2s, box-shadow .2s; position: relative; overflow: hidden; }
+    .quiz-card:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 8px 32px rgba(124,92,252,0.18); }
+    .quiz-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+    .quiz-card h3 { font-size: 16px; font-weight: 700; line-height: 1.3; }
+    .quiz-card .meta { display: flex; align-items: center; gap: 8px; }
+    .quiz-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--muted); font-weight: 500; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; align-items: center; gap: 14px; transition: border-color .2s; }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-icon { font-size: 26px; line-height: 1; }
+    .stat-val { font-size: 26px; font-weight: 800; line-height: 1; letter-spacing: -0.5px; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+    .empty-cta { margin-top: 16px; }
+    .page-title { background: linear-gradient(90deg, var(--text), var(--muted)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* ─── Light theme ───────────────────────────────────────────── */
+    :root[data-theme="light"] {
+      --bg: #f0f2fa;
+      --surface: #ffffff;
+      --surface2: #e8eaf4;
+      --border: rgba(0,0,0,0.08);
+      --text: #12122a;
+      --muted: rgba(18,18,42,0.48);
+    }
+    [data-theme="light"] .countdown-overlay { background: rgba(240,242,250,0.94); }
+    [data-theme="light"] .page-title { background: linear-gradient(90deg, var(--text), var(--muted)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    [data-theme="light"] .toast { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+    [data-theme="light"] .quiz-card:hover { box-shadow: 0 8px 32px rgba(124,92,252,0.12); }
+
+    /* ─── Onboarding tour ───────────────────────────────────────── */
+    #ob-overlay { position: fixed; inset: 0; z-index: 500; }
+    #ob-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); }
+    #ob-card { position: fixed; bottom: 36px; right: 36px; z-index: 510; background: var(--surface); border: 1.5px solid var(--accent); border-radius: 20px; padding: 28px; max-width: 340px; width: calc(100vw - 48px); box-shadow: 0 24px 64px rgba(0,0,0,0.45), 0 0 0 1px rgba(124,92,252,0.2); animation: obIn .35s cubic-bezier(.2,.8,.4,1); }
+    @keyframes obIn { from { transform: translateY(20px) scale(0.96); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+    .ob-dots { display: flex; gap: 7px; margin-bottom: 18px; }
+    .ob-dot { height: 7px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--border); transition: all .25s; width: 7px; }
+    .ob-dot.active { background: var(--accent); width: 22px; border-color: var(--accent); }
+    #ob-title { font-size: 17px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.2px; }
+    #ob-body { font-size: 14px; color: var(--muted); line-height: 1.65; margin-bottom: 22px; }
+    #ob-body strong { color: var(--text); }
+    #ob-actions { display: flex; align-items: center; gap: 8px; }
+    .ob-step-label { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px; }
+    .ob-highlight { outline: 2.5px solid var(--accent2) !important; outline-offset: 5px !important; border-radius: 8px; position: relative; z-index: 505 !important; }
   </style>
 </head>
 <body>
@@ -220,7 +268,8 @@
           <div id="user-name" style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
           <div id="user-role-label" style="font-size:11px;color:var(--muted)">Creador</div>
         </div>
-        <button onclick="logout()" title="Cerrar sesión" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;flex-shrink:0;padding:4px" class="nav-label">⏻</button>
+        <button id="theme-btn" onclick="toggleTheme()" title="Cambiar tema" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;flex-shrink:0;padding:4px" class="nav-label">☀️</button>
+        <button onclick="logout()" title="Cerrar sesión" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;flex-shrink:0;padding:4px" class="nav-label">⏻</button>
       </div>
     </div>
   </aside>
@@ -231,6 +280,22 @@
       <div class="page-header">
         <h2 class="page-title">Mis quizzes</h2>
         <button class="btn btn-primary" onclick="showView('create')">+ Nuevo quiz</button>
+      </div>
+      <div id="stats-row" class="stats-row" style="display:none">
+        <div class="stat-card">
+          <div class="stat-icon">🎯</div>
+          <div>
+            <div class="stat-val" id="stat-quiz-count">0</div>
+            <div class="stat-label">Quizzes creados</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">❓</div>
+          <div>
+            <div class="stat-val" id="stat-question-count">0</div>
+            <div class="stat-label">Preguntas en total</div>
+          </div>
+        </div>
       </div>
       <div id="quiz-grid" class="quiz-grid">
         <div class="empty">
@@ -414,6 +479,18 @@ Berlín
 
 <div class="toast" id="toast"></div>
 
+<!-- Onboarding tour -->
+<div id="ob-overlay" style="display:none">
+  <div id="ob-backdrop"></div>
+  <div id="ob-card">
+    <div class="ob-step-label">Tour de bienvenida</div>
+    <div class="ob-dots" id="ob-dots"></div>
+    <div id="ob-title"></div>
+    <div id="ob-body"></div>
+    <div id="ob-actions"></div>
+  </div>
+</div>
+
 <script>
 const API = SYNAPTO_CONFIG.backendUrl + '/api';
 let socket = null;
@@ -451,6 +528,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (fresh.role === 'admin') document.getElementById('nav-users').style.display = 'flex';
     }
   } catch {}
+
+  // Start onboarding for new users (after a short delay so UI settles)
+  setTimeout(startOnboarding, 600);
 });
 
 function authFetch(url, opts = {}) {
@@ -637,20 +717,40 @@ async function loadQuizzes() {
   const res = await authFetch(API + '/quizzes');
   const quizzes = await res.json();
   const grid = document.getElementById('quiz-grid');
+  const statsRow = document.getElementById('stats-row');
+
   if (!quizzes.length) {
-    grid.innerHTML = '<div class="empty"><div class="empty-icon">🎯</div><p>Todavía no tenés quizzes.<br>¡Creá el primero!</p></div>';
+    statsRow.style.display = 'none';
+    grid.innerHTML = `
+      <div class="empty" style="grid-column:1/-1">
+        <div class="empty-icon">🎯</div>
+        <p>Todavía no tenés quizzes.<br>¡Creá el primero!</p>
+        <div class="empty-cta">
+          <button class="btn btn-primary" onclick="showView('create')">+ Crear mi primer quiz</button>
+        </div>
+      </div>`;
     return;
   }
+
+  // Update stats
+  const totalQuestions = quizzes.reduce((s, q) => s + (q.question_count || 0), 0);
+  document.getElementById('stat-quiz-count').textContent = quizzes.length;
+  document.getElementById('stat-question-count').textContent = totalQuestions;
+  statsRow.style.display = 'grid';
+
   grid.innerHTML = quizzes.map(q => {
     const qCount = q.question_count != null ? q.question_count : '?';
-    const qLabel = qCount !== 1 ? 'preguntas' : 'pregunta';
-    const fecha = new Date(q.created_at).toLocaleDateString('es-AR');
+    const fecha = new Date(q.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
+    const safeTitle = q.title.replace(/'/g, "\\'");
     return `
     <div class="quiz-card">
       <h3>${q.title}</h3>
-      <div class="meta">${qCount} ${qLabel} · Creado el ${fecha}</div>
+      <div class="meta">
+        <span class="quiz-badge">❓ ${qCount} ${qCount !== 1 ? 'preguntas' : 'pregunta'}</span>
+        <span class="quiz-badge">📅 ${fecha}</span>
+      </div>
       <div class="quiz-actions">
-        <button class="btn btn-primary btn-sm" onclick="startGame('${q.id}','${q.title.replace(/'/g,"\\'")}')">▶ Jugar</button>
+        <button class="btn btn-primary btn-sm" onclick="startGame('${q.id}','${safeTitle}')">▶ Jugar</button>
         <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️ Editar</button>
         <button class="btn btn-ghost btn-sm" onclick="duplicateQuiz('${q.id}')">📋 Duplicar</button>
         <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}')">🗑️</button>
@@ -1195,6 +1295,89 @@ function importQuestions() {
 }
 
 loadQuizzes();
+
+// ─── Theme toggle ──────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const doc = document.documentElement;
+  const isLight = doc.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  doc.setAttribute('data-theme', next);
+  localStorage.setItem('synapto-theme', next);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = next === 'light' ? '🌙' : '☀️';
+}
+
+// Sync button icon after DOMContentLoaded (theme attr already set by inline script)
+document.addEventListener('DOMContentLoaded', () => {
+  const t = document.documentElement.getAttribute('data-theme') || 'dark';
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = t === 'light' ? '🌙' : '☀️';
+});
+
+// ─── Onboarding tour ──────────────────────────────────────────────────────────
+const OB_STEPS = [
+  {
+    title: '¡Bienvenido a Synapto! 🎉',
+    body: 'Tu plataforma para crear y lanzar quizzes en tiempo real. Este tour de 3 pasos te explica cómo empezar en minutos.',
+    target: null
+  },
+  {
+    title: 'Crea tu primer quiz 📝',
+    body: 'Haz clic en <strong>"Nuevo quiz"</strong> en el menú lateral. Podés agregar preguntas una a una o importarlas en lote pegando texto.',
+    target: () => document.querySelectorAll('.nav-item')[1]
+  },
+  {
+    title: '¡Lanza el juego! 🚀',
+    body: 'Cuando tengas un quiz listo, haz clic en <strong>"▶ Jugar"</strong>. Compartí el código o QR con tus jugadores y controlá la partida en tiempo real.',
+    target: null
+  }
+];
+
+let _obStep = 0;
+
+function startOnboarding() {
+  if (localStorage.getItem('synapto_onboarded')) return;
+  _obStep = 0;
+  document.getElementById('ob-overlay').style.display = 'block';
+  _renderObStep(0);
+}
+
+function _renderObStep(idx) {
+  _obStep = idx;
+  const step = OB_STEPS[idx];
+  const total = OB_STEPS.length;
+
+  document.querySelectorAll('.ob-highlight').forEach(el => el.classList.remove('ob-highlight'));
+  if (step.target) {
+    const el = step.target();
+    if (el) el.classList.add('ob-highlight');
+  }
+
+  document.getElementById('ob-dots').innerHTML = OB_STEPS.map((_, i) =>
+    `<div class="ob-dot ${i === idx ? 'active' : ''}"></div>`
+  ).join('');
+
+  document.getElementById('ob-title').textContent = step.title;
+  document.getElementById('ob-body').innerHTML = step.body;
+
+  const isLast = idx === total - 1;
+  document.getElementById('ob-actions').innerHTML = `
+    <button class="btn btn-ghost btn-sm" onclick="_finishOnboarding()" style="font-size:13px;padding:7px 14px">Omitir</button>
+    <div style="display:flex;gap:8px;margin-left:auto">
+      ${idx > 0 ? `<button class="btn btn-ghost btn-sm" onclick="_renderObStep(${idx - 1})">← Atrás</button>` : ''}
+      ${isLast
+        ? `<button class="btn btn-primary btn-sm" onclick="_finishOnboarding()">¡Entendido! 🚀</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="_renderObStep(${idx + 1})">Siguiente →</button>`
+      }
+    </div>
+  `;
+}
+
+function _finishOnboarding() {
+  localStorage.setItem('synapto_onboarded', '1');
+  document.getElementById('ob-overlay').style.display = 'none';
+  document.querySelectorAll('.ob-highlight').forEach(el => el.classList.remove('ob-highlight'));
+}
 
 // Keep Railway awake
 setInterval(() => fetch(API + '/health').catch(() => {}), 4 * 60 * 1000);
