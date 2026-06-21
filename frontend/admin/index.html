@@ -768,7 +768,11 @@ function connectSocket(code) {
     });
   });
 
-  socket.on('player:answer:result', () => {});
+  socket.on('admin:state', ({ status, players, currentQuestion }) => {
+    if (status === 'lobby' || status === 'results' || status === 'finished') {
+      players.forEach(p => addPlayerChip(p));
+    }
+  });
 
   socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
     pendingRanking = ranking;

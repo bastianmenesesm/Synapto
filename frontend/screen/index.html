@@ -194,7 +194,6 @@ if (!code) {
     updatePlayers(players);
   });
 
-  fetch(API + '/api/games/' + code).catch(() => {});
 
   socket.on('lobby:update', ({ players }) => updatePlayers(players));
 
