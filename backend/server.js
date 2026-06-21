@@ -32,6 +32,16 @@ db.exec(`
 `);
 try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`); } catch {}
 try { db.exec(`ALTER TABLE quizzes ADD COLUMN user_id TEXT`); } catch {}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_results (
+    id TEXT PRIMARY KEY,
+    quiz_id TEXT NOT NULL,
+    played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    player_count INTEGER DEFAULT 0,
+    avg_score REAL DEFAULT 0,
+    question_tallies TEXT DEFAULT '[]'
+  );
+`);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
@@ -158,6 +168,7 @@ function createGameState(quizId) {
     timeLeft: 0,
     lastReveal: null,
     lastRanking: null,
+    questionTallies: [],
   };
 }
 
@@ -227,6 +238,54 @@ app.delete('/api/quizzes/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
   db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+app.get('/api/quizzes/:id/stats', requireAuth, (req, res) => {
+  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
+
+  const results = db.prepare('SELECT * FROM game_results WHERE quiz_id = ? ORDER BY played_at DESC').all(req.params.id);
+  const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(req.params.id);
+
+  if (!results.length) return res.json({ playCount: 0, avgScore: 0, avgPlayers: 0, mostMissedQuestion: null, recentGames: [] });
+
+  const playCount = results.length;
+  const avgScore = Math.round(results.reduce((s, r) => s + r.avg_score, 0) / playCount);
+  const avgPlayers = Math.round(results.reduce((s, r) => s + r.player_count, 0) / playCount);
+
+  // Aggregate tallies per question index across all games
+  const aggregated = questions.map(() => [0, 0, 0, 0]);
+  results.forEach(r => {
+    try {
+      const tallies = JSON.parse(r.question_tallies);
+      tallies.forEach((t, qi) => {
+        if (!aggregated[qi] || !Array.isArray(t)) return;
+        t.forEach((v, oi) => { aggregated[qi][oi] = (aggregated[qi][oi] || 0) + v; });
+      });
+    } catch {}
+  });
+
+  // Find most-missed question (highest wrong answer rate)
+  let mostMissedQuestion = null;
+  let worstPct = -1;
+  questions.forEach((q, i) => {
+    const tally = aggregated[i];
+    const total = tally.reduce((s, v) => s + v, 0);
+    if (!total) return;
+    const wrongPct = Math.round((1 - (tally[q.correct_index] || 0) / total) * 100);
+    if (wrongPct > worstPct) {
+      worstPct = wrongPct;
+      mostMissedQuestion = { text: q.text, wrongPct, position: i + 1 };
+    }
+  });
+
+  const recentGames = results.slice(0, 5).map(r => ({
+    playedAt: r.played_at,
+    playerCount: r.player_count,
+    avgScore: Math.round(r.avg_score)
+  }));
+
+  res.json({ playCount, avgScore, avgPlayers, mostMissedQuestion, recentGames });
 });
 
 app.post('/api/games', requireAuth, async (req, res) => {
@@ -349,6 +408,14 @@ io.on('connection', (socket) => {
         .map((p, i) => ({ rank: i + 1, name: p.name, emoji: p.emoji, score: p.score }));
       game.lastRanking = ranking;
       io.to(`game:${code}`).emit('game:finished', { ranking });
+
+      // Persist game stats
+      try {
+        const scores = Object.values(game.players).map(p => p.score);
+        const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+        db.prepare('INSERT INTO game_results (id, quiz_id, player_count, avg_score, question_tallies) VALUES (?, ?, ?, ?, ?)')
+          .run(uuidv4(), game.quizId, scores.length, avgScore, JSON.stringify(game.questionTallies));
+      } catch (e) { console.warn('Stats save error:', e.message); }
       return;
     }
 
@@ -451,6 +518,7 @@ function revealAnswers(code, q) {
     .map((p, i) => ({ rank: i + 1, name: p.name, emoji: p.emoji, score: p.score }));
 
   game.lastReveal = { correctIndex: q.correct_index, tally, ranking, questionText: q.text, options };
+  game.questionTallies[game.currentQuestion] = tally;
 
   io.to(`game:${code}`).emit('question:reveal', { correctIndex: q.correct_index, tally, ranking });
 }

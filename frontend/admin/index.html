@@ -228,6 +228,39 @@
     #ob-actions { display: flex; align-items: center; gap: 8px; }
     .ob-step-label { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px; }
     .ob-highlight { outline: 2.5px solid var(--accent2) !important; outline-offset: 5px !important; border-radius: 8px; position: relative; z-index: 505 !important; }
+
+    /* ─── Stats modal ───────────────────────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .stats-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; text-align: center; }
+    .stats-tile-val { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent2); line-height: 1; }
+    .stats-tile-label { font-size: 12px; color: var(--muted); margin-top: 4px; font-weight: 500; }
+    .missed-card { background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.25); border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; }
+    .missed-card-title { font-size: 12px; font-weight: 600; color: var(--danger); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .missed-card-text { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 8px; }
+    .missed-pct-wrap { display: flex; align-items: center; gap: 10px; }
+    .missed-pct-bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 999px; overflow: hidden; }
+    .missed-pct-fill { height: 100%; border-radius: 999px; background: var(--danger); transition: width .8s ease; width: 0%; }
+    .missed-pct-num { font-size: 13px; font-weight: 700; color: var(--danger); white-space: nowrap; }
+    .recent-game-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .recent-game-row:last-child { border-bottom: none; }
+
+    /* ─── Preview modal ─────────────────────────────────────────── */
+    .preview-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+    .preview-counter { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .preview-body { padding: 28px 28px 20px; }
+    .preview-q-text { font-size: 19px; font-weight: 700; line-height: 1.35; text-align: center; margin-bottom: 22px; padding: 20px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .preview-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .preview-opt { padding: 14px 18px; border-radius: var(--radius); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; opacity: 0.52; transition: opacity .2s; }
+    .preview-opt.correct { opacity: 1; box-shadow: 0 0 0 3px rgba(255,255,255,0.55); }
+    .preview-opt.opt-0 { background: #E63946; color: #fff; }
+    .preview-opt.opt-1 { background: #2196F3; color: #fff; }
+    .preview-opt.opt-2 { background: #FF9800; color: #fff; }
+    .preview-opt.opt-3 { background: #4CAF50; color: #fff; }
+    .preview-footer { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: var(--surface); border-top: 1px solid var(--border); gap: 12px; }
+    .preview-time { font-size: 13px; color: var(--muted); }
+    .preview-dots { display: flex; gap: 5px; }
+    .preview-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); }
+    .preview-dot.active { background: var(--accent2); border-color: var(--accent2); }
   </style>
 </head>
 <body>
@@ -478,6 +511,37 @@ Berlín
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Stats modal -->
+<div id="modal-stats" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeStatsModal()">
+  <div class="modal" style="max-width:460px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h2 id="stats-quiz-title" style="font-size:17px;font-weight:700"></h2>
+      <button onclick="closeStatsModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:4px">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:20px;font-weight:500;text-transform:uppercase;letter-spacing:.4px">Estadísticas del quiz</p>
+    <div id="stats-content"><div class="empty" style="padding:32px 0"><div class="empty-icon">⏳</div><p>Cargando…</p></div></div>
+  </div>
+</div>
+
+<!-- Preview modal -->
+<div id="modal-preview" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePreviewModal()">
+  <div class="modal" style="max-width:620px;padding:0;overflow:hidden">
+    <div class="preview-header">
+      <div>
+        <span id="preview-title" style="font-size:15px;font-weight:700"></span>
+        <span class="preview-counter" id="preview-counter" style="margin-left:12px"></span>
+      </div>
+      <button onclick="closePreviewModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:4px">✕</button>
+    </div>
+    <div id="preview-body" class="preview-body"></div>
+    <div class="preview-footer">
+      <button class="btn btn-ghost btn-sm" id="preview-prev" onclick="previewNav(-1)">← Anterior</button>
+      <div class="preview-dots" id="preview-dots"></div>
+      <button class="btn btn-ghost btn-sm" id="preview-next" onclick="previewNav(1)">Siguiente →</button>
+    </div>
+  </div>
+</div>
 
 <!-- Onboarding tour -->
 <div id="ob-overlay" style="display:none">
@@ -751,8 +815,10 @@ async function loadQuizzes() {
       </div>
       <div class="quiz-actions">
         <button class="btn btn-primary btn-sm" onclick="startGame('${q.id}','${safeTitle}')">▶ Jugar</button>
-        <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️ Editar</button>
-        <button class="btn btn-ghost btn-sm" onclick="duplicateQuiz('${q.id}')">📋 Duplicar</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQuizPreview('${q.id}','${safeTitle}')">👁 Previa</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQuizStats('${q.id}','${safeTitle}')">📊 Stats</button>
+        <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateQuiz('${q.id}')">📋</button>
         <button class="btn btn-danger btn-sm" onclick="deleteQuiz('${q.id}')">🗑️</button>
       </div>
     </div>
@@ -1292,6 +1358,129 @@ function importQuestions() {
   } else {
     toast('No se encontraron preguntas válidas', true);
   }
+}
+
+// ─── Quiz stats ───────────────────────────────────────────────────────────────
+async function showQuizStats(id, title) {
+  document.getElementById('stats-quiz-title').textContent = title;
+  document.getElementById('stats-content').innerHTML = '<div class="empty" style="padding:32px 0"><div class="empty-icon">⏳</div><p>Cargando…</p></div>';
+  document.getElementById('modal-stats').style.display = 'flex';
+
+  try {
+    const res = await authFetch(`${API}/quizzes/${id}/stats`);
+    const s = await res.json();
+    const el = document.getElementById('stats-content');
+
+    if (s.playCount === 0) {
+      el.innerHTML = `<div class="empty" style="padding:32px 0"><div class="empty-icon">🎮</div><p>Este quiz todavía no se jugó.<br>¡Lanzá una partida para ver estadísticas!</p></div>`;
+      return;
+    }
+
+    const missedHtml = s.mostMissedQuestion ? `
+      <div class="missed-card">
+        <div class="missed-card-title">⚠️ Pregunta más fallada</div>
+        <div class="missed-card-text">${s.mostMissedQuestion.position}. ${s.mostMissedQuestion.text}</div>
+        <div class="missed-pct-wrap">
+          <div class="missed-pct-bar"><div class="missed-pct-fill" id="missed-fill" style="width:0%"></div></div>
+          <div class="missed-pct-num">${s.mostMissedQuestion.wrongPct}% erró</div>
+        </div>
+      </div>` : '';
+
+    const recentHtml = s.recentGames.length ? `
+      <p style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Partidas recientes</p>
+      ${s.recentGames.map(g => `
+        <div class="recent-game-row">
+          <span style="flex:1;color:var(--muted)">${new Date(g.playedAt).toLocaleDateString('es-CL', {day:'numeric',month:'short',year:'numeric'})}</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="font-size:16px">👥</span>${g.playerCount}</span>
+          <span style="display:flex;align-items:center;gap:4px;color:var(--accent2);font-weight:700"><span style="font-size:14px">⭐</span>${g.avgScore.toLocaleString()} pts</span>
+        </div>
+      `).join('')}` : '';
+
+    el.innerHTML = `
+      <div class="stats-grid">
+        <div class="stats-tile"><div class="stats-tile-val">${s.playCount}</div><div class="stats-tile-label">Partidas jugadas</div></div>
+        <div class="stats-tile"><div class="stats-tile-val">${s.avgPlayers}</div><div class="stats-tile-label">Jugadores promedio</div></div>
+        <div class="stats-tile" style="grid-column:1/-1"><div class="stats-tile-val">${s.avgScore.toLocaleString()}</div><div class="stats-tile-label">Puntaje promedio por jugador</div></div>
+      </div>
+      ${missedHtml}
+      ${recentHtml}
+    `;
+
+    // Animate the bar after render
+    if (s.mostMissedQuestion) {
+      setTimeout(() => {
+        const fill = document.getElementById('missed-fill');
+        if (fill) fill.style.width = s.mostMissedQuestion.wrongPct + '%';
+      }, 80);
+    }
+  } catch (e) {
+    document.getElementById('stats-content').innerHTML = `<div class="empty"><p>Error al cargar estadísticas.</p></div>`;
+  }
+}
+
+function closeStatsModal() {
+  document.getElementById('modal-stats').style.display = 'none';
+}
+
+// ─── Quiz preview ──────────────────────────────────────────────────────────────
+let _previewQuestions = [];
+let _previewIdx = 0;
+const OPT_COLORS = ['#E63946','#2196F3','#FF9800','#4CAF50'];
+const OPT_LETTERS = ['A','B','C','D'];
+
+async function showQuizPreview(id, title) {
+  document.getElementById('preview-title').textContent = title;
+  document.getElementById('preview-body').innerHTML = '<div class="empty" style="padding:40px 0"><div class="empty-icon">⏳</div><p>Cargando…</p></div>';
+  document.getElementById('modal-preview').style.display = 'flex';
+
+  const res = await authFetch(`${API}/quizzes/${id}`);
+  const quiz = await res.json();
+  _previewQuestions = quiz.questions || [];
+  _previewIdx = 0;
+  _renderPreviewSlide();
+}
+
+function _renderPreviewSlide() {
+  const q = _previewQuestions[_previewIdx];
+  const total = _previewQuestions.length;
+
+  document.getElementById('preview-counter').textContent = `${_previewIdx + 1} de ${total}`;
+
+  document.getElementById('preview-dots').innerHTML = _previewQuestions.map((_, i) =>
+    `<div class="preview-dot ${i === _previewIdx ? 'active' : ''}"></div>`
+  ).join('');
+
+  document.getElementById('preview-prev').disabled = _previewIdx === 0;
+  document.getElementById('preview-prev').style.opacity = _previewIdx === 0 ? '0.35' : '1';
+  document.getElementById('preview-next').disabled = _previewIdx === total - 1;
+  document.getElementById('preview-next').style.opacity = _previewIdx === total - 1 ? '0.35' : '1';
+  document.getElementById('preview-next').textContent = _previewIdx === total - 1 ? 'Fin ✓' : 'Siguiente →';
+
+  const opts = q.options || q.options_list || [];
+  document.getElementById('preview-body').innerHTML = `
+    <div class="preview-q-text">${q.text}</div>
+    <div class="preview-opts">
+      ${opts.map((opt, i) => `
+        <div class="preview-opt opt-${i} ${i === (q.correctIndex ?? q.correct_index) ? 'correct' : ''}">
+          <span style="width:26px;height:26px;border-radius:6px;background:rgba(0,0,0,0.22);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0">${OPT_LETTERS[i]}</span>
+          <span>${opt}</span>
+          ${i === (q.correctIndex ?? q.correct_index) ? '<span style="margin-left:auto;font-size:16px">✓</span>' : ''}
+        </div>
+      `).join('')}
+    </div>
+    <div class="preview-time" style="margin-top:14px;text-align:right">⏱ ${q.time_limit || q.timeLimit || 20}s por pregunta</div>
+  `;
+}
+
+function previewNav(dir) {
+  const next = _previewIdx + dir;
+  if (next < 0 || next >= _previewQuestions.length) return;
+  _previewIdx = next;
+  _renderPreviewSlide();
+}
+
+function closePreviewModal() {
+  document.getElementById('modal-preview').style.display = 'none';
 }
 
 loadQuizzes();
