@@ -592,7 +592,7 @@ async function changeUserRole(userId, role) {
     const res = await authFetch(`${API}/admin/users/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    toast(`Rol actualizado a ${role} ✓`);
+    toast(`Rol actualizado a ${role === 'admin' ? 'Admin' : 'Creador'} ✓`);
   } catch (e) { toast(e.message); loadUsers(); }
 }
 
