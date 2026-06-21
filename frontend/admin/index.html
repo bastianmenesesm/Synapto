@@ -340,7 +340,7 @@ Berlín
           <div style="display:flex;gap:10px">
             <button class="btn btn-primary" id="btn-ver-ranking" onclick="verRanking()" style="display:none">📊 Ver ranking</button>
             <button class="btn btn-success" id="btn-siguiente-pregunta" onclick="siguientePregunta()" style="display:none">Siguiente pregunta →</button>
-            <button class="btn btn-danger"  id="btn-cerrar-juego"       onclick="showView('quizzes')"  style="display:none">Cerrar juego</button>
+            <button class="btn btn-danger"  id="btn-cerrar-juego"       onclick="closeGame()"  style="display:none">Cerrar juego</button>
           </div>
         </div>
       </div>
@@ -740,6 +740,13 @@ function enterRankingState() {
 
   if (pendingRanking) showRanking(pendingRanking);
   setButtons(false, true, false);
+}
+
+function closeGame() {
+  if (socket) { socket.disconnect(); socket = null; }
+  currentGame = null;
+  sound.stopMusic(0.3);
+  showView('quizzes');
 }
 
 function connectSocket(code) {
