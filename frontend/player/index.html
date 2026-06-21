@@ -84,6 +84,13 @@
     .timer-bar { width: 100%; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
     .timer-fill { height: 100%; background: var(--accent2); border-radius: 3px; transition: width 1s linear, background .3s; }
 
+    /* Big circular timer */
+    .player-timer-ring { width: 76px; height: 76px; position: relative; flex-shrink: 0; }
+    .player-timer-ring svg { transform: rotate(-90deg); }
+    .ptr-bg { fill: none; stroke: var(--surface2); stroke-width: 7; }
+    .ptr-fg { fill: none; stroke: var(--accent2); stroke-width: 7; stroke-dasharray: 176; stroke-dashoffset: 0; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke .3s; }
+    .ptr-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 900; color: var(--accent2); transition: color .3s; }
+
     .q-text { font-size: 18px; font-weight: 600; line-height: 1.4; text-align: center; margin-bottom: 8px; }
 
     .score-big { font-size: 48px; font-weight: 800; text-align: center; color: var(--accent2); }
@@ -161,9 +168,15 @@
   <!-- QUESTION screen -->
   <div id="s-question" class="hidden">
     <div class="card" style="padding:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:12px">
         <span id="q-counter" style="font-size:13px;color:var(--muted)">P 1/1</span>
-        <span id="q-timer" style="font-size:16px;font-weight:700;color:var(--accent2)">20</span>
+        <div class="player-timer-ring" id="player-timer-ring">
+          <svg width="76" height="76" viewBox="0 0 76 76">
+            <circle class="ptr-bg" cx="38" cy="38" r="28"/>
+            <circle class="ptr-fg" id="ptr-fg" cx="38" cy="38" r="28"/>
+          </svg>
+          <div class="ptr-num" id="q-timer">20</div>
+        </div>
       </div>
       <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
       <p class="q-text" id="q-text" style="margin-top:14px"></p>
@@ -222,6 +235,9 @@
       <div style="font-size:48px">🔒</div>
       <p style="font-size:18px;font-weight:700;margin-top:12px">El juego ya comenzó</p>
       <p style="font-size:14px;color:var(--muted);margin-top:8px">Pedile al admin el código del próximo juego.</p>
+      <button id="btn-spectate" class="btn btn-primary" style="margin-top:20px;background:rgba(78,205,196,.2);color:var(--accent2);border:1px solid var(--accent2)">
+        👁 Ver como espectador
+      </button>
     </div>
   </div>
 
@@ -319,7 +335,15 @@ function connectSocket(code, name) {
   });
 
   socket.on('error', (msg) => {
-    if (msg === 'El juego ya comenzó') { show('s-started'); if (socket) socket.disconnect(); return; }
+    if (msg === 'El juego ya comenzó') {
+      show('s-started');
+      const code = document.getElementById('inp-code').value.trim().toUpperCase() || savedCode;
+      document.getElementById('btn-spectate').onclick = () => {
+        window.location.href = `/screen?code=${code}`;
+      };
+      if (socket) socket.disconnect();
+      return;
+    }
     showError(msg); if (socket) socket.disconnect();
   });
 
@@ -332,6 +356,9 @@ function connectSocket(code, name) {
     document.getElementById('q-counter').textContent = `P ${index + 1}/${total}`;
     document.getElementById('q-text').textContent = text;
     document.getElementById('q-timer').textContent = timeLimit;
+    document.getElementById('q-timer').style.color = 'var(--accent2)';
+    document.getElementById('ptr-fg').style.strokeDashoffset = '0';
+    document.getElementById('ptr-fg').style.stroke = 'var(--accent2)';
     document.getElementById('timer-fill').style.width = '100%';
     document.getElementById('timer-fill').style.background = 'var(--accent2)';
 
@@ -353,11 +380,21 @@ function connectSocket(code, name) {
   });
 
   socket.on('timer:tick', ({ timeLeft }) => {
-    document.getElementById('q-timer').textContent = timeLeft;
-    const pct = (timeLeft / currentTimeLimit) * 100;
+    const pct = timeLeft / currentTimeLimit;
+    const urgent = timeLeft <= 5;
+    const color = urgent ? '#E63946' : 'var(--accent2)';
+
+    const numEl = document.getElementById('q-timer');
+    numEl.textContent = timeLeft;
+    numEl.style.color = color;
+
+    const fg = document.getElementById('ptr-fg');
+    fg.style.strokeDashoffset = 176 - pct * 176;
+    fg.style.stroke = color;
+
     const fill = document.getElementById('timer-fill');
-    fill.style.width = pct + '%';
-    fill.style.background = pct < 30 ? '#E63946' : 'var(--accent2)';
+    fill.style.width = (pct * 100) + '%';
+    fill.style.background = color;
   });
 
   socket.on('player:answer:result', ({ correct, correctIndex, score }) => {

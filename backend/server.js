@@ -261,11 +261,33 @@ io.on('connection', (socket) => {
     socket.join(`game:${code}`);
     socket.gameCode = code;
     socket.role = 'screen';
-    socket.emit('screen:state', {
+
+    const payload = {
       status: game.status,
-      players: Object.values(game.players).map(p => ({ name: p.name, score: p.score })),
+      players: Object.values(game.players).map(p => ({ name: p.name, emoji: p.emoji, score: p.score })),
       joinUrl: game.joinUrl
-    });
+    };
+
+    if (game.status === 'question' && game.currentQuestion >= 0) {
+      const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(game.quizId);
+      const q = questions[game.currentQuestion];
+      if (q) {
+        payload.currentQuestion = {
+          index: game.currentQuestion,
+          total: questions.length,
+          text: q.text,
+          options: JSON.parse(q.options),
+          timeLimit: q.time_limit,
+          timeLeft: game.timeLeft
+        };
+      }
+    } else if (game.status === 'results' && game.lastReveal) {
+      payload.currentReveal = game.lastReveal;
+    } else if (game.status === 'finished' && game.lastRanking) {
+      payload.finalRanking = game.lastRanking;
+    }
+
+    socket.emit('screen:state', payload);
   });
 
   // Admin: start game / next question
@@ -284,6 +306,7 @@ io.on('connection', (socket) => {
       const ranking = Object.values(game.players)
         .sort((a, b) => b.score - a.score)
         .map((p, i) => ({ rank: i + 1, name: p.name, emoji: p.emoji, score: p.score }));
+      game.lastRanking = ranking;
       io.to(`game:${code}`).emit('game:finished', { ranking });
       return;
     }
@@ -390,6 +413,14 @@ function revealAnswers(code, q) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
     .map((p, i) => ({ rank: i + 1, name: p.name, emoji: p.emoji, score: p.score }));
+
+  game.lastReveal = {
+    correctIndex: q.correct_index,
+    tally,
+    ranking,
+    questionText: q.text,
+    options
+  };
 
   io.to(`game:${code}`).emit('question:reveal', {
     correctIndex: q.correct_index,

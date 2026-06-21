@@ -41,6 +41,13 @@
     }
     .theme-btn:hover { background: var(--accent); color: #fff; }
 
+    .spectator-badge {
+      display: none; background: rgba(255,152,0,.15); border: 1px solid rgba(255,152,0,.4);
+      color: #FF9800; font-size: 12px; font-weight: 700; padding: 4px 12px;
+      border-radius: 999px; letter-spacing: .5px;
+    }
+    .spectator-badge.visible { display: block; }
+
     .timer-ring { width: 64px; height: 64px; position: relative; }
     .timer-ring svg { transform: rotate(-90deg); }
     .timer-ring .bg { fill: none; stroke: var(--surface); stroke-width: 5; }
@@ -50,14 +57,63 @@
     .content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; position: relative; overflow: hidden; }
     .hidden { display: none !important; }
 
-    /* Lobby */
-    .lobby-code { font-size: 96px; font-weight: 900; letter-spacing: 16px; color: var(--accent2); line-height: 1; }
-    .lobby-sub { font-size: 20px; color: var(--muted); margin-top: 8px; margin-bottom: 32px; text-align: center; }
-    .qr-block { background: #fff; border-radius: 16px; padding: 16px; }
-    .qr-block img { display: block; width: 240px; height: 240px; }
-    .player-bubbles { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 28px; max-width: 800px; }
+    /* ── Lobby ── */
+    .lobby-wrap { display: flex; flex-direction: column; align-items: center; gap: 0; }
+    .lobby-headline {
+      font-size: 18px; color: var(--muted); margin-bottom: 32px;
+      animation: fadeSlideDown .5s .05s ease both;
+    }
+    .lobby-center { display: flex; align-items: center; gap: 56px; flex-wrap: wrap; justify-content: center; }
+
+    .qr-block {
+      background: #fff; border-radius: 20px; padding: 18px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.4);
+      animation: qrBounce .65s .2s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    .qr-block img { display: block; width: 220px; height: 220px; }
+
+    .lobby-code-wrap { text-align: center; }
+    .lobby-join-hint { font-size: 16px; color: var(--muted); margin-bottom: 12px; animation: fadeSlideDown .5s .1s ease both; }
+    .lobby-domain {
+      font-size: 20px; font-weight: 700; color: var(--accent); margin-bottom: 20px;
+      animation: fadeSlideDown .5s .15s ease both;
+    }
+    .lobby-code {
+      font-size: 96px; font-weight: 900; letter-spacing: 16px; color: var(--accent2); line-height: 1;
+      animation: codeBlast .7s .08s cubic-bezier(.17,.67,.35,1.35) both, codeGlow 2.5s 1s ease-in-out infinite;
+    }
+    .lobby-url {
+      font-size: 14px; color: var(--muted); margin-top: 14px;
+      animation: fadeSlideUp .5s .9s ease both;
+    }
+
+    .player-bubbles { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 32px; max-width: 900px; }
     .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 18px; font-size: 16px; animation: popIn .3s ease; display: flex; align-items: center; gap: 6px; }
     @keyframes popIn { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+
+    /* Lobby entrance animations */
+    @keyframes codeBlast {
+      0%   { transform: scale(0.3) rotate(-3deg); opacity: 0; filter: blur(12px); }
+      60%  { transform: scale(1.07) rotate(1deg); opacity: 1; filter: blur(0); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; filter: blur(0); }
+    }
+    @keyframes codeGlow {
+      0%, 100% { text-shadow: 0 0 30px rgba(78,205,196,.35); }
+      50%       { text-shadow: 0 0 70px rgba(78,205,196,.75), 0 0 120px rgba(78,205,196,.25); }
+    }
+    @keyframes qrBounce {
+      0%   { transform: scale(0.4); opacity: 0; }
+      65%  { transform: scale(1.07); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes fadeSlideDown {
+      from { transform: translateY(-14px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes fadeSlideUp {
+      from { transform: translateY(10px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
 
     /* Question */
     .q-progress { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
@@ -112,6 +168,7 @@
   <h1>Synapto</h1>
   <div id="q-counter-header" style="font-size:14px;color:var(--muted)"></div>
   <div class="header-right">
+    <span class="spectator-badge" id="spectator-badge">👁 ESPECTADOR</span>
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">☀️</button>
     <div class="timer-ring" id="timer-ring" style="visibility:hidden">
       <svg width="64" height="64" viewBox="0 0 64 64">
@@ -127,13 +184,19 @@
 
   <!-- Lobby -->
   <div id="s-lobby">
-    <div style="text-align:center">
-      <p class="lobby-sub">Escaneá el QR o ingresá el código</p>
-      <div id="qr-block" class="qr-block" style="margin:0 auto 16px"></div>
-      <div class="lobby-code" id="lobby-code">------</div>
-      <p style="font-size:16px;color:var(--muted);margin-top:8px" id="lobby-url"></p>
+    <div class="lobby-wrap">
+      <p class="lobby-headline">Escaneá el QR o ingresá el código</p>
+      <div class="lobby-center">
+        <div id="qr-block" class="qr-block"></div>
+        <div class="lobby-code-wrap">
+          <p class="lobby-join-hint">Ingresá en</p>
+          <p class="lobby-domain">synapto.vercel.app</p>
+          <div class="lobby-code" id="lobby-code">------</div>
+          <p class="lobby-url" id="lobby-url"></p>
+        </div>
+      </div>
+      <div class="player-bubbles" id="player-bubbles"></div>
     </div>
-    <div class="player-bubbles" id="player-bubbles"></div>
   </div>
 
   <!-- Question -->
@@ -182,18 +245,51 @@ function show(id) {
   document.getElementById(id).classList.remove('hidden');
 }
 
+function showSpectatorBadge() {
+  document.getElementById('spectator-badge').classList.add('visible');
+}
+
 if (!code) {
   document.querySelector('.content').innerHTML = '<p style="color:rgba(255,255,255,.4);font-size:24px">Sin código de sala. Abrí desde el panel admin.</p>';
 } else {
   const socket = io(API);
   socket.emit('screen:join', { code });
 
-  socket.on('screen:state', ({ joinUrl, players }) => {
+  socket.on('screen:state', ({ status, joinUrl, players, currentQuestion, currentReveal, finalRanking }) => {
     document.getElementById('lobby-code').textContent = code;
     document.getElementById('lobby-url').textContent = joinUrl || '';
     updatePlayers(players);
-  });
 
+    if (status === 'question' && currentQuestion) {
+      showSpectatorBadge();
+      timerLimit = currentQuestion.timeLimit;
+      currentQ = { text: currentQuestion.text, options: currentQuestion.options };
+      document.getElementById('q-progress').textContent = `Pregunta ${currentQuestion.index + 1} de ${currentQuestion.total}`;
+      document.getElementById('q-text-big').textContent = currentQuestion.text;
+      const letters = ['A','B','C','D'];
+      document.getElementById('options-grid').innerHTML = currentQuestion.options.map((opt, i) => `
+        <div class="opt-card opt-${i}" id="opt-${i}">
+          <span class="lbl">${letters[i]}</span>
+          <span>${opt}</span>
+        </div>
+      `).join('');
+      document.getElementById('q-counter-header').textContent = `P ${currentQuestion.index + 1}/${currentQuestion.total}`;
+      setTimer(currentQuestion.timeLeft);
+      document.getElementById('timer-ring').style.visibility = 'visible';
+      show('s-question');
+
+    } else if (status === 'results' && currentReveal) {
+      showSpectatorBadge();
+      currentQ = { text: currentReveal.questionText, options: currentReveal.options };
+      renderReveal(currentReveal.correctIndex, currentReveal.tally, currentReveal.ranking, currentReveal.questionText, currentReveal.options);
+
+    } else if (status === 'finished' && finalRanking) {
+      showSpectatorBadge();
+      renderFinal(finalRanking);
+    } else {
+      show('s-lobby');
+    }
+  });
 
   socket.on('lobby:update', ({ players }) => updatePlayers(players));
 
@@ -221,67 +317,73 @@ if (!code) {
 
   socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
     document.getElementById('timer-ring').style.visibility = 'hidden';
-    const letters = ['A','B','C','D'];
-    const total = tally.reduce((a,b)=>a+b,0) || 1;
-
-    if (currentQ) {
-      document.getElementById('reveal-q-text').textContent = currentQ.text;
-      document.getElementById('reveal-options-grid').innerHTML = currentQ.options.map((opt, i) => `
-        <div class="opt-card opt-${i} ${i === correctIndex ? 'opt-correct' : 'opt-wrong'}">
-          <span class="lbl">${i === correctIndex ? '✓' : letters[i]}</span>
-          <span>${opt}</span>
-        </div>
-      `).join('');
-    }
-
-    document.getElementById('tally-grid').innerHTML = tally.map((count, i) => `
-      <div class="tally-item t${i}">
-        <span>${letters[i]}</span>
-        <div class="tally-bar"><div class="tally-fill" style="width:${Math.round(count/total*100)}%"></div></div>
-        <span class="tally-count">${count}</span>
-      </div>
-    `).join('');
-
-    const medals = ['🥇','🥈','🥉'];
-    const maxScore = ranking[0]?.score || 1;
-    document.getElementById('reveal-ranking').innerHTML = ranking.map((p, i) => `
-      <div class="rank-item" style="animation-delay:${i*0.1}s">
-        <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
-        <span style="font-size:22px">${p.emoji || ''}</span>
-        <div style="flex:1">
-          <div style="display:flex;justify-content:space-between">
-            <span class="rank-name">${p.name}</span>
-            <span class="rank-pts">${p.score.toLocaleString()}</span>
-          </div>
-          <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
-        </div>
-      </div>
-    `).join('');
-
-    show('s-reveal');
+    if (currentQ) renderReveal(correctIndex, tally, ranking, currentQ.text, currentQ.options);
   });
 
   socket.on('reaction:new', ({ emoji }) => spawnReaction(emoji));
 
   socket.on('game:finished', ({ ranking }) => {
     document.getElementById('timer-ring').style.visibility = 'hidden';
-    const medals = ['🥇','🥈','🥉'];
-    const maxScore = ranking[0]?.score || 1;
-    document.getElementById('final-ranking').innerHTML = ranking.map((p, i) => `
-      <div class="rank-item" style="animation-delay:${i*0.12}s">
-        <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
-        <span style="font-size:22px">${p.emoji || ''}</span>
-        <div style="flex:1">
-          <div style="display:flex;justify-content:space-between">
-            <span class="rank-name">${p.name}</span>
-            <span class="rank-pts">${p.score.toLocaleString()}</span>
-          </div>
-          <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
-        </div>
-      </div>
-    `).join('');
-    show('s-final');
+    renderFinal(ranking);
   });
+}
+
+function renderReveal(correctIndex, tally, ranking, questionText, options) {
+  const letters = ['A','B','C','D'];
+  const total = tally.reduce((a,b)=>a+b,0) || 1;
+
+  document.getElementById('reveal-q-text').textContent = questionText;
+  document.getElementById('reveal-options-grid').innerHTML = options.map((opt, i) => `
+    <div class="opt-card opt-${i} ${i === correctIndex ? 'opt-correct' : 'opt-wrong'}">
+      <span class="lbl">${i === correctIndex ? '✓' : letters[i]}</span>
+      <span>${opt}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('tally-grid').innerHTML = tally.map((count, i) => `
+    <div class="tally-item t${i}">
+      <span>${letters[i]}</span>
+      <div class="tally-bar"><div class="tally-fill" style="width:${Math.round(count/total*100)}%"></div></div>
+      <span class="tally-count">${count}</span>
+    </div>
+  `).join('');
+
+  const medals = ['🥇','🥈','🥉'];
+  const maxScore = ranking[0]?.score || 1;
+  document.getElementById('reveal-ranking').innerHTML = ranking.map((p, i) => `
+    <div class="rank-item" style="animation-delay:${i*0.1}s">
+      <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
+      <span style="font-size:22px">${p.emoji || ''}</span>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between">
+          <span class="rank-name">${p.name}</span>
+          <span class="rank-pts">${p.score.toLocaleString()}</span>
+        </div>
+        <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
+      </div>
+    </div>
+  `).join('');
+
+  show('s-reveal');
+}
+
+function renderFinal(ranking) {
+  const medals = ['🥇','🥈','🥉'];
+  const maxScore = ranking[0]?.score || 1;
+  document.getElementById('final-ranking').innerHTML = ranking.map((p, i) => `
+    <div class="rank-item" style="animation-delay:${i*0.12}s">
+      <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
+      <span style="font-size:22px">${p.emoji || ''}</span>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between">
+          <span class="rank-name">${p.name}</span>
+          <span class="rank-pts">${p.score.toLocaleString()}</span>
+        </div>
+        <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
+      </div>
+    </div>
+  `).join('');
+  show('s-final');
 }
 
 function updatePlayers(players) {
