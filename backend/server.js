@@ -46,7 +46,8 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Acceso denegado' });
+  const row = db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+  if (row?.role !== 'admin') return res.status(403).json({ error: 'Acceso denegado' });
   next();
 }
 
