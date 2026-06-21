@@ -256,6 +256,12 @@
     .opt-row .opt-input::placeholder { color: var(--muted); }
     .opt-row .opt-check { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; transition: all .15s; color: transparent; }
     .opt-row.correct .opt-check { background: var(--success); border-color: var(--success); color: #fff; }
+    .opt-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 0 0 0 6px; flex-shrink: 0; opacity: 0; transition: opacity .15s, color .15s; }
+    .opt-row:hover .opt-remove { opacity: 1; }
+    .opt-remove:hover { color: var(--danger); }
+    .opt-add-btn { display: flex; align-items: center; gap: 6px; margin-top: 8px; background: none; border: 1.5px dashed var(--border); color: var(--muted); border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; justify-content: center; transition: all .15s; }
+    .opt-add-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .opt-add-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .opt-row-0 .opt-letter { background: rgba(230,57,70,0.18); color: #E63946; }
     .opt-row-1 .opt-letter { background: rgba(33,150,243,0.18); color: #2196F3; }
     .opt-row-2 .opt-letter { background: rgba(255,152,0,0.18); color: #FF9800; }
@@ -1042,6 +1048,16 @@ function addQuestion(data = null) {
   ).join('');
   const customActive = !PRESET_TIMES.includes(timeVal);
 
+  // Determine initial options: use data if present (strip trailing empties), else start with 2 blank slots
+  let initOpts = data?.options
+    ? data.options.map(o => o ?? '').filter((o, i, arr) => o || i < 2)  // keep at least 2
+    : ['', ''];
+  initOpts = initOpts.slice(0, 4);
+  if (initOpts.length < 2) initOpts = initOpts.concat(Array(2 - initOpts.length).fill(''));
+
+  const safeCorrect = Math.min(correctIdx, initOpts.length - 1);
+  const optsHtml = initOpts.map((val, i) => _buildOptRowHtml(i, val, i === safeCorrect)).join('');
+
   div.innerHTML = `
     <div class="q-card-header">
       <div style="display:flex;align-items:center;gap:8px">
@@ -1067,23 +1083,75 @@ function addQuestion(data = null) {
           <input type="number" class="time-custom-input q-time-hidden ${customActive ? 'show' : ''}" value="${timeVal}" min="5" max="300" placeholder="seg"/>
         </div>
       </div>
-      <div class="opt-rows">
-        ${OPT_LABEL_LETTERS.map((lbl, i) => `
-          <div class="opt-row opt-row-${i} ${i === correctIdx ? 'correct' : ''}" onclick="setCorrect(this)">
-            <div class="opt-letter">${lbl}</div>
-            <input type="text" class="opt-input q-option" placeholder="Opción ${lbl}" value="${data ? (data.options[i] || '') : ''}" onclick="event.stopPropagation()"/>
-            <div class="opt-check">✓</div>
-          </div>
-        `).join('')}
-      </div>
-      <input type="hidden" class="q-correct" value="${correctIdx}"/>
+      <div class="opt-rows">${optsHtml}</div>
+      <button type="button" class="opt-add-btn" onclick="addOption(this)" ${initOpts.length >= 4 ? 'disabled' : ''}>+ Agregar opción</button>
+      <input type="hidden" class="q-correct" value="${safeCorrect}"/>
     </div>
   `;
 
   list.appendChild(div);
   _initDrag(div);
+  _syncOptControls(div);
   _updateQCountLabel();
   if (data?.text) updateSummary(div.querySelector('.q-text'));
+}
+
+// ─── Option row helpers ───────────────────────────────────────────────────────
+function _buildOptRowHtml(i, value, isCorrect) {
+  const safe = (value || '').replace(/"/g, '&quot;');
+  return `<div class="opt-row opt-row-${i}${isCorrect ? ' correct' : ''}" onclick="setCorrect(this)">
+    <div class="opt-letter">${OPT_LABEL_LETTERS[i]}</div>
+    <input type="text" class="opt-input q-option" placeholder="Opción ${OPT_LABEL_LETTERS[i]}" value="${safe}" onclick="event.stopPropagation()"/>
+    <div class="opt-check">✓</div>
+    <button type="button" class="opt-remove" onclick="event.stopPropagation();removeOption(this)" title="Eliminar opción">×</button>
+  </div>`;
+}
+
+function _syncOptControls(card) {
+  const rows = card.querySelectorAll('.opt-row');
+  const count = rows.length;
+  // Show/hide remove buttons (hide when only 2 options remain)
+  rows.forEach(r => {
+    const btn = r.querySelector('.opt-remove');
+    if (btn) btn.style.display = count <= 2 ? 'none' : '';
+  });
+  // Enable/disable add button
+  const addBtn = card.querySelector('.opt-add-btn');
+  if (addBtn) addBtn.disabled = count >= 4;
+}
+
+function _renumberOptRows(card) {
+  card.querySelectorAll('.opt-row').forEach((row, i) => {
+    row.className = `opt-row opt-row-${i}${row.classList.contains('correct') ? ' correct' : ''}`;
+    const letter = row.querySelector('.opt-letter');
+    if (letter) letter.textContent = OPT_LABEL_LETTERS[i];
+    const input = row.querySelector('.opt-input');
+    if (input) input.placeholder = `Opción ${OPT_LABEL_LETTERS[i]}`;
+    if (row.classList.contains('correct')) card.querySelector('.q-correct').value = i;
+  });
+}
+
+function addOption(addBtn) {
+  const card = addBtn.closest('.q-card');
+  const rows = card.querySelectorAll('.opt-row');
+  if (rows.length >= 4) return;
+  const i = rows.length;
+  card.querySelector('.opt-rows').insertAdjacentHTML('beforeend', _buildOptRowHtml(i, '', false));
+  _syncOptControls(card);
+}
+
+function removeOption(removeBtn) {
+  const row = removeBtn.closest('.opt-row');
+  const card = row.closest('.q-card');
+  if (card.querySelectorAll('.opt-row').length <= 2) return;
+  const wasCorrect = row.classList.contains('correct');
+  row.remove();
+  _renumberOptRows(card);
+  if (wasCorrect) {
+    const first = card.querySelector('.opt-row');
+    if (first) setCorrect(first);
+  }
+  _syncOptControls(card);
 }
 
 function setCorrect(rowEl) {
@@ -1193,9 +1261,15 @@ async function saveQuiz() {
   cards.forEach(card => {
     const text = card.querySelector('.q-text').value.trim();
     const timeLimit = parseInt(card.querySelector('.time-custom-input, .q-time-hidden')?.value) || 20;
-    const options = [...card.querySelectorAll('.q-option')].map(i => i.value.trim());
-    const correctIndex = parseInt(card.querySelector('.q-correct').value);
-    if (!text || options.some(o => !o)) {
+
+    // Read only filled option rows; derive correctIndex from the .correct row
+    const optRows = [...card.querySelectorAll('.opt-row')];
+    const filledRows = optRows.filter(r => r.querySelector('.opt-input')?.value.trim());
+    const options = filledRows.map(r => r.querySelector('.opt-input').value.trim());
+    const correctRow = filledRows.findIndex(r => r.classList.contains('correct'));
+    const correctIndex = correctRow >= 0 ? correctRow : 0;
+
+    if (!text || options.length < 2) {
       valid = false;
       card.classList.add('invalid');
       // Auto-expand collapsed invalid cards
