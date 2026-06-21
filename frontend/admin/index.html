@@ -276,6 +276,10 @@ Berlín
         <div style="display:flex;gap:10px;align-items:center">
           <span id="game-status-badge" class="status-badge status-lobby"><span class="dot-pulse"></span> Lobby</span>
           <a id="screen-link" href="#" target="_blank" class="btn btn-ghost btn-sm">🖥️ Pantalla</a>
+          <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;">
+            <button id="mute-btn" onclick="toggleMute()" title="Silenciar" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:18px;line-height:1;padding:0">🔊</button>
+            <input type="range" id="vol-slider" min="0" max="1" step="0.05" value="0.7" style="width:80px;cursor:pointer;accent-color:var(--accent2)" oninput="sound.setVolume(+this.value);document.getElementById('mute-btn').textContent=+this.value===0?'🔇':'🔊'"/>
+          </div>
           <button class="btn btn-ghost" onclick="showView('quizzes')">← Salir</button>
         </div>
       </div>
@@ -550,6 +554,7 @@ async function startGame(quizId, title) {
   questionCount = qdata.questions.length;
 
   showView('game');
+  sound.init().then(() => sound.playMusic('lobby'));
   connectSocket(game.code);
 }
 
@@ -603,6 +608,8 @@ function showCountdown(onDone) {
     el.className = i < 3 ? 'countdown-number' : 'countdown-go';
     el.textContent = steps[i];
     overlay.appendChild(el);
+    if (i < 3) sound.sfx('beep-low');
+    else sound.sfx('beep-high');
     i++;
     setTimeout(showStep, 800);
   }
@@ -700,19 +707,22 @@ function connectSocket(code) {
   socket.emit('admin:join', { code });
 
   socket.on('lobby:update', ({ players }) => {
+    if (players.length > totalPlayers) sound.sfx('player-in');
     totalPlayers = players.length;
     document.getElementById('player-count').textContent = players.length;
     document.getElementById('player-lobby').innerHTML = players.map(p =>
-      `<div class="player-chip">${p.name}</div>`
+      `<div class="player-chip">${p.emoji || ''} ${p.name}</div>`
     ).join('');
   });
 
   socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
     setBadge('live');
     pendingRanking = null;
+    sound.stopMusic(0.4);
     document.getElementById('game-lobby-section').style.display = 'none';
     document.getElementById('game-question-section').classList.add('active');
     showCountdown(() => {
+      sound.playMusic('question');
       enterQuestionState(text, options, index, total, timeLimit);
     });
   });
@@ -722,12 +732,15 @@ function connectSocket(code) {
   socket.on('question:reveal', ({ correctIndex, tally, ranking }) => {
     pendingRanking = ranking;
     answeredPlayers = tally.reduce((a, b) => a + b, 0);
+    sound.stopMusic(0.6);
+    setTimeout(() => sound.sfx('reveal'), 300);
     enterRevealState(correctIndex, tally);
   });
 
   socket.on('game:finished', ({ ranking }) => {
     setBadge('finished');
     gameState = 'finished';
+    sound.stopMusic(0.5);
     document.getElementById('q-text-display').style.display = 'none';
     document.getElementById('q-options-display').style.display = 'none';
     document.getElementById('q-timer-bar').style.display = 'none';
@@ -736,14 +749,20 @@ function connectSocket(code) {
     document.getElementById('ranking-preview').style.display = 'none';
     document.getElementById('correct-banner').style.display = 'none';
     setButtons(false, false, true);
+    setTimeout(() => sound.playMusic('victory', false), 800);
     showFinalRanking(ranking);
   });
 
   socket.on('timer:tick', ({ timeLeft }) => {
     if (gameState !== 'question') return;
     document.getElementById('q-timer-text').textContent = timeLeft;
-    if (timeLeft <= 5) document.getElementById('q-timer-text').style.color = 'var(--danger)';
-    else document.getElementById('q-timer-text').style.color = 'var(--accent2)';
+    if (timeLeft <= 5) {
+      document.getElementById('q-timer-text').style.color = 'var(--danger)';
+      sound.sfx('beep-low');
+      if (timeLeft === 5) sound.tension();
+    } else {
+      document.getElementById('q-timer-text').style.color = 'var(--accent2)';
+    }
   });
 }
 
@@ -867,6 +886,7 @@ function revealRankRow(idx, maxScore, score) {
   const bar = document.getElementById(`rank-bar-${idx}`);
   if (!row) return;
   row.classList.add('visible');
+  sound.sfx(idx === 0 ? 'fanfare' : 'swoosh');
   setTimeout(() => {
     if (bar) bar.style.width = Math.round((score / maxScore) * 100) + '%';
   }, 100);
@@ -910,8 +930,170 @@ function importQuestions() {
 
 loadQuizzes();
 
-// Keep Railway awake — ping every 4 min to prevent cold starts for players
+// Keep Railway awake
 setInterval(() => fetch(API + '/health').catch(() => {}), 4 * 60 * 1000);
+
+// ─── Sound Engine ─────────────────────────────────────────────────────────────
+class SoundEngine {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+    this.musicGain = null;
+    this.sfxGain = null;
+    this.currentSrc = null;
+    this.buffers = {};
+    this._volume = 0.7;
+    this._muted = false;
+  }
+
+  async init() {
+    if (this.ctx) { this.ctx.resume(); return; }
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = this._volume;
+    this.masterGain.connect(this.ctx.destination);
+
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.gain.value = 0.55;
+    this.musicGain.connect(this.masterGain);
+
+    this.sfxGain = this.ctx.createGain();
+    this.sfxGain.gain.value = 0.85;
+    this.sfxGain.connect(this.masterGain);
+
+    await Promise.all(['lobby','question','victory'].map(k => this._load(k)));
+  }
+
+  async _load(key) {
+    try {
+      const res = await fetch(`../sounds/${key}.mp3`);
+      const buf = await res.arrayBuffer();
+      this.buffers[key] = await this.ctx.decodeAudioData(buf);
+    } catch(e) { console.warn('Sound load failed:', key); }
+  }
+
+  playMusic(name, loop = true) {
+    if (!this.ctx) return;
+    this._fadeOutCurrent(0.8);
+    const buf = this.buffers[name];
+    if (!buf) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = loop;
+    src.connect(this.musicGain);
+    this.musicGain.gain.setValueAtTime(0, this.ctx.currentTime);
+    this.musicGain.gain.linearRampToValueAtTime(0.55, this.ctx.currentTime + 1.2);
+    src.start();
+    this.currentSrc = src;
+    this._currentRate = 1;
+  }
+
+  stopMusic(fadeTime = 1.5) {
+    this._fadeOutCurrent(fadeTime);
+  }
+
+  tension() {
+    if (!this.currentSrc) return;
+    try {
+      this.currentSrc.playbackRate.linearRampToValueAtTime(1.18, this.ctx.currentTime + 1);
+      this.musicGain.gain.linearRampToValueAtTime(0.7, this.ctx.currentTime + 1);
+    } catch(e) {}
+  }
+
+  _fadeOutCurrent(t) {
+    if (!this.currentSrc) return;
+    const src = this.currentSrc;
+    this.currentSrc = null;
+    try {
+      this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, this.ctx.currentTime);
+      this.musicGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + t);
+      setTimeout(() => { try { src.stop(); } catch(e){} }, (t + 0.15) * 1000);
+    } catch(e) {}
+  }
+
+  setVolume(v) {
+    this._volume = v;
+    if (this.masterGain) this.masterGain.gain.value = this._muted ? 0 : v;
+  }
+
+  setMuted(m) {
+    this._muted = m;
+    if (this.masterGain) this.masterGain.gain.value = m ? 0 : this._volume;
+  }
+
+  sfx(name) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    switch (name) {
+      case 'beep-low':   this._tone(330, 'sine',     0.09, 0.04, t); break;
+      case 'beep-high':  this._tone(880, 'sine',     0.12, 0.04, t); break;
+      case 'correct':    this._chord([523,659,784,1047], 0.55, 0.08, t); break;
+      case 'wrong':      this._descend(t); break;
+      case 'player-in':  this._tone(1100, 'sine',    0.06, 0.02, t); break;
+      case 'reveal':     this._chord([440,554,659],  0.35, 0.06, t); break;
+      case 'swoosh':     this._swoosh(t); break;
+      case 'fanfare':    this._fanfare(t); break;
+    }
+  }
+
+  _tone(freq, type, dur, att, when) {
+    const osc = this.ctx.createOscillator();
+    const g   = this.ctx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    osc.connect(g); g.connect(this.sfxGain);
+    g.gain.setValueAtTime(0, when);
+    g.gain.linearRampToValueAtTime(0.45, when + att);
+    g.gain.exponentialRampToValueAtTime(0.001, when + dur);
+    osc.start(when); osc.stop(when + dur + 0.05);
+  }
+
+  _chord(freqs, dur, att, when) {
+    freqs.forEach((f, i) => this._tone(f, 'sine', dur, att, when + i * 0.06));
+  }
+
+  _descend(when) {
+    const osc = this.ctx.createOscillator();
+    const g   = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(380, when);
+    osc.frequency.exponentialRampToValueAtTime(130, when + 0.5);
+    osc.connect(g); g.connect(this.sfxGain);
+    g.gain.setValueAtTime(0.3, when);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.55);
+    osc.start(when); osc.stop(when + 0.6);
+  }
+
+  _swoosh(when) {
+    const len = Math.floor(this.ctx.sampleRate * 0.28);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d   = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * (1 - i/len);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = 1200;
+    const g = this.ctx.createGain();
+    src.connect(filt); filt.connect(g); g.connect(this.sfxGain);
+    g.gain.setValueAtTime(0.5, when);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.28);
+    src.start(when);
+  }
+
+  _fanfare(when) {
+    [[523,.0],[659,.15],[784,.3],[1047,.45],[1319,.6]].forEach(([f,d]) =>
+      this._tone(f, 'sine', 0.35, 0.05, when + d)
+    );
+  }
+}
+
+const sound = new SoundEngine();
+
+function toggleMute() {
+  sound._muted = !sound._muted;
+  sound.setMuted(sound._muted);
+  document.getElementById('mute-btn').textContent = sound._muted ? '🔇' : '🔊';
+  document.getElementById('vol-slider').value = sound._muted ? 0 : sound._volume;
+}
 </script>
 </body>
 </html>
