@@ -430,6 +430,7 @@
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
             <label>Preguntas <span id="q-count-label" style="font-size:12px;color:var(--muted);font-weight:400"></span></label>
             <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" id="btn-shuffle-all" onclick="shuffleAllOptions()" style="display:none" title="Desordenar alternativas de todas las preguntas">🔀 Desordenar todas</button>
               <button class="btn btn-ghost btn-sm" id="btn-import-toggle" onclick="toggleImport()">⬆ Importar</button>
               <button class="btn btn-primary btn-sm" onclick="addQuestion()">+ Agregar</button>
             </div>
@@ -1066,6 +1067,7 @@ function addQuestion(data = null) {
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <button type="button" class="q-collapse-btn" onclick="toggleCollapse(this)" title="Colapsar">▲</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="shuffleOptions(this)" title="Desordenar alternativas">🔀</button>
         <button class="btn btn-danger btn-sm" onclick="removeQuestion(this)">Eliminar</button>
       </div>
     </div>
@@ -1206,6 +1208,30 @@ function _updateQCountLabel() {
   const n = document.querySelectorAll('.q-card').length;
   const el = document.getElementById('q-count-label');
   if (el) el.textContent = n ? `(${n})` : '';
+  const shuffleAll = document.getElementById('btn-shuffle-all');
+  if (shuffleAll) shuffleAll.style.display = n > 0 ? 'inline-flex' : 'none';
+}
+
+// ─── Shuffle options ───────────────────────────────────────────────────────────
+function _shuffleCard(card) {
+  const optRows = card.querySelector('.opt-rows');
+  const rows = [...optRows.querySelectorAll('.opt-row')];
+  // Fisher-Yates shuffle
+  for (let i = rows.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    optRows.insertBefore(rows[j], rows[i]);
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+  }
+  _renumberOptRows(card);
+}
+
+function shuffleOptions(btn) {
+  _shuffleCard(btn.closest('.q-card'));
+}
+
+function shuffleAllOptions() {
+  document.querySelectorAll('.q-card').forEach(card => _shuffleCard(card));
+  toast('Alternativas desordenadas ✓');
 }
 
 // ─── Drag & drop reorder ───────────────────────────────────────────────────────
