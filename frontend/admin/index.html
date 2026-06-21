@@ -1722,6 +1722,10 @@ function _parseSmartText(raw) {
     .replace(/^\s*#{1,6}\s*/gm, '')        // ## headings
     .replace(/^\s*[-–—•]\s+/gm, '');      // bullet points
 
+  // 1b. Split lines that contain an option AND the next question on the same line
+  // e.g. "El flujo inorgánico  ¿Qué sucede..." → two lines with blank in between
+  raw = raw.replace(/([^\n¿]+?)\s{2,}(¿)/g, '$1\n\n$2');
+
   const allLines = raw.split('\n');
 
   // 2. Skip preamble: find first line that looks like a question
