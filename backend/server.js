@@ -158,22 +158,33 @@ io.on('connection', (socket) => {
   });
 
   // Player joins
-  socket.on('player:join', ({ code, name }) => {
+  socket.on('player:join', ({ code, name, emoji }) => {
     const game = games[code];
     if (!game) return socket.emit('error', 'Sala no encontrada');
     if (game.status !== 'lobby') return socket.emit('error', 'El juego ya comenzó');
     if (!name?.trim()) return socket.emit('error', 'Nombre requerido');
 
     const playerName = name.trim().substring(0, 20);
-    game.players[socket.id] = { name: playerName, score: 0, answered: false };
+    const playerEmoji = (emoji && typeof emoji === 'string') ? emoji.trim().substring(0, 4) : '😎';
+    game.players[socket.id] = { name: playerName, emoji: playerEmoji, score: 0, answered: false };
     socket.join(`game:${code}`);
     socket.gameCode = code;
     socket.role = 'player';
 
     socket.emit('player:joined', { name: playerName });
     io.to(`game:${code}`).emit('lobby:update', {
-      players: Object.values(game.players).map(p => ({ name: p.name, score: p.score }))
+      players: Object.values(game.players).map(p => ({ name: p.name, emoji: p.emoji, score: p.score }))
     });
+  });
+
+  // Player reaction
+  socket.on('player:react', ({ emoji }) => {
+    const code = socket.gameCode;
+    const game = games[code];
+    if (!game || socket.role !== 'player') return;
+    const player = game.players[socket.id];
+    if (!player) return;
+    io.to(`game:${code}`).emit('reaction:new', { emoji, playerName: player.name });
   });
 
   // Screen joins (projector view)
@@ -205,7 +216,7 @@ io.on('connection', (socket) => {
       clearInterval(game.questionTimer);
       const ranking = Object.values(game.players)
         .sort((a, b) => b.score - a.score)
-        .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
+        .map((p, i) => ({ rank: i + 1, name: p.name, emoji: p.emoji, score: p.score }));
       io.to(`game:${code}`).emit('game:finished', { ranking });
       return;
     }
@@ -292,7 +303,7 @@ io.on('connection', (socket) => {
     if (socket.role === 'player') {
       delete game.players[socket.id];
       io.to(`game:${code}`).emit('lobby:update', {
-        players: Object.values(game.players).map(p => ({ name: p.name, score: p.score }))
+        players: Object.values(game.players).map(p => ({ name: p.name, emoji: p.emoji, score: p.score }))
       });
     }
   });
@@ -311,7 +322,7 @@ function revealAnswers(code, q) {
   const ranking = Object.values(game.players)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
-    .map((p, i) => ({ rank: i + 1, name: p.name, score: p.score }));
+    .map((p, i) => ({ rank: i + 1, name: p.name, emoji: p.emoji, score: p.score }));
 
   io.to(`game:${code}`).emit('question:reveal', {
     correctIndex: q.correct_index,

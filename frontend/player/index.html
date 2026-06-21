@@ -24,71 +24,96 @@
     .screen { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 16px; }
     .hidden { display: none !important; }
 
-    /* Logo */
     .logo { text-align: center; margin-bottom: 8px; }
     .logo h1 { font-size: 28px; font-weight: 800; background: linear-gradient(90deg, #7c5cfc, #4ecdc4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-    /* Card */
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
 
-    /* Input */
     input[type="text"] {
       width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
       color: var(--text); padding: 14px 16px; font-size: 16px; outline: none;
     }
     input:focus { border-color: var(--accent); }
 
-    /* Btn */
     .btn { width: 100%; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-primary:active { transform: scale(.97); }
     .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
 
-    /* Answer buttons */
+    /* Emoji picker */
+    .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-top: 8px; }
+    .emoji-opt {
+      font-size: 24px; background: var(--surface2); border: 2px solid transparent;
+      border-radius: 10px; padding: 6px; cursor: pointer; text-align: center;
+      transition: transform .1s, border-color .1s;
+    }
+    .emoji-opt:hover { transform: scale(1.15); }
+    .emoji-opt.selected { border-color: var(--accent2); background: rgba(78,205,196,.15); transform: scale(1.15); }
+
+    /* Answer buttons — vibrant colors */
     .answers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .ans-btn {
-      padding: 20px 12px; border-radius: 14px; font-size: 15px; font-weight: 600;
+      padding: 20px 12px; border-radius: 14px; font-size: 15px; font-weight: 700;
       cursor: pointer; border: none; color: #fff; transition: transform .1s, opacity .15s;
       min-height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-      text-align: center; line-height: 1.3;
+      text-align: center; line-height: 1.3; box-shadow: 0 4px 12px rgba(0,0,0,.3);
     }
     .ans-btn:active { transform: scale(.95); }
-    .ans-btn.a0 { background: #e05555; }
-    .ans-btn.a1 { background: #2b9e9a; }
-    .ans-btn.a2 { background: #c9a227; }
-    .ans-btn.a3 { background: #3a9e5e; }
-    .ans-btn.correct { outline: 4px solid #fff; }
-    .ans-btn.wrong { opacity: .35; }
+    .ans-btn.a0 { background: #E63946; }
+    .ans-btn.a1 { background: #2196F3; }
+    .ans-btn.a2 { background: #FF9800; }
+    .ans-btn.a3 { background: #4CAF50; }
+    .ans-btn.correct { outline: 4px solid #fff; transform: scale(1.03); }
+    .ans-btn.wrong { opacity: .3; }
     .ans-btn:disabled { cursor: default; }
     .ans-letter { font-size: 22px; font-weight: 800; }
+
+    /* Countdown overlay inside question card */
+    .countdown-overlay {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(13,13,26,.85); z-index: 100; backdrop-filter: blur(4px);
+    }
+    .countdown-num {
+      font-size: 120px; font-weight: 900; color: #fff;
+      animation: cdpop .6s ease;
+      text-shadow: 0 0 40px rgba(124,92,252,.8);
+    }
+    @keyframes cdpop { 0%{transform:scale(1.6);opacity:0} 40%{opacity:1} 100%{transform:scale(1);opacity:1} }
 
     /* Timer bar */
     .timer-bar { width: 100%; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
     .timer-fill { height: 100%; background: var(--accent2); border-radius: 3px; transition: width 1s linear, background .3s; }
 
-    /* Question text */
     .q-text { font-size: 18px; font-weight: 600; line-height: 1.4; text-align: center; margin-bottom: 8px; }
-    .q-meta { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 16px; }
 
-    /* Score */
     .score-big { font-size: 48px; font-weight: 800; text-align: center; color: var(--accent2); }
     .score-label { font-size: 14px; color: var(--muted); text-align: center; }
 
-    /* Waiting */
     .wait-icon { font-size: 48px; text-align: center; margin-bottom: 8px; }
     .wait-text { font-size: 16px; color: var(--muted); text-align: center; }
 
-    /* Result */
     .result-icon { font-size: 64px; text-align: center; }
     .result-msg { font-size: 20px; font-weight: 700; text-align: center; }
     .result-pts { font-size: 14px; color: var(--accent2); text-align: center; }
 
-    /* Ranking */
+    /* Reaction buttons */
+    .reactions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+    .react-btn {
+      font-size: 32px; background: var(--surface2); border: 2px solid var(--border);
+      border-radius: 14px; padding: 12px 8px; cursor: pointer;
+      transition: transform .15s, border-color .15s, background .15s;
+    }
+    .react-btn:active { transform: scale(.9); }
+    .react-btn:hover { border-color: var(--accent2); background: rgba(78,205,196,.1); }
+    .react-btn.sent { border-color: var(--accent2); background: rgba(78,205,196,.2); transform: scale(1.1); cursor: default; }
+
     .ranking-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
     .rank-medal { font-size: 20px; min-width: 28px; }
     .rank-name { flex: 1; }
     .rank-score { font-weight: 700; color: var(--accent2); }
     .rank-me { background: rgba(124,92,252,.15); border-radius: 8px; padding: 10px; margin: -10px; }
+
+    @keyframes pulse{0%,100%{opacity:.2}50%{opacity:1}}
   </style>
 </head>
 <body>
@@ -97,7 +122,7 @@
   <!-- JOIN screen -->
   <div id="s-join">
     <div class="logo"><h1>Synapto</h1></div>
-    <div class="card" style="display:flex;flex-direction:column;gap:14px">
+    <div class="card" style="display:flex;flex-direction:column;gap:16px">
       <div>
         <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Código del juego</p>
         <input type="text" id="inp-code" placeholder="ABC123" maxlength="8" style="text-transform:uppercase;font-size:20px;font-weight:700;letter-spacing:4px;text-align:center"/>
@@ -105,6 +130,12 @@
       <div>
         <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Tu nombre</p>
         <input type="text" id="inp-name" placeholder="¿Cómo te llamás?" maxlength="20"/>
+      </div>
+      <div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Elegí tu avatar</p>
+        <div class="emoji-grid" id="emoji-grid">
+          <!-- populated by JS -->
+        </div>
       </div>
       <button class="btn btn-primary" onclick="joinGame()">Entrar al juego →</button>
       <p id="join-error" style="color:#ff6b6b;font-size:13px;text-align:center;display:none"></p>
@@ -115,7 +146,7 @@
   <div id="s-lobby" class="hidden">
     <div class="logo"><h1>Synapto</h1></div>
     <div class="card" style="text-align:center">
-      <div class="wait-icon">👋</div>
+      <div id="lobby-avatar" style="font-size:56px;margin-bottom:4px"></div>
       <p style="font-size:18px;font-weight:700;margin-bottom:4px">¡Estás dentro!</p>
       <p id="lobby-name" style="font-size:15px;color:var(--muted);margin-bottom:16px"></p>
       <div class="wait-text">Esperando que el admin inicie el juego…</div>
@@ -125,7 +156,6 @@
         <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .4s infinite ease-in-out"></div>
       </div>
     </div>
-    <style>@keyframes pulse{0%,100%{opacity:.2}50%{opacity:1}}</style>
   </div>
 
   <!-- QUESTION screen -->
@@ -156,6 +186,15 @@
       <div class="result-icon" id="r-icon"></div>
       <p class="result-msg" id="r-msg" style="margin-top:8px"></p>
       <p class="result-pts" id="r-pts" style="margin-top:6px"></p>
+      <div style="margin-top:16px">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:6px">Reaccioná</p>
+        <div class="reactions" id="reactions">
+          <button class="react-btn" onclick="sendReaction('🎉')">🎉</button>
+          <button class="react-btn" onclick="sendReaction('🤯')">🤯</button>
+          <button class="react-btn" onclick="sendReaction('😎')">😎</button>
+          <button class="react-btn" onclick="sendReaction('💀')">💀</button>
+        </div>
+      </div>
       <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Ranking parcial</p>
         <div id="r-ranking"></div>
@@ -203,13 +242,38 @@
 
 </div>
 
+<!-- Countdown overlay (outside .screen to cover full viewport) -->
+<div id="countdown-overlay" class="countdown-overlay hidden">
+  <div class="countdown-num" id="countdown-num">3</div>
+</div>
+
 <script>
 const API = SYNAPTO_CONFIG.backendUrl;
 let socket = null;
 let myName = '';
+let myEmoji = '😎';
 let myScore = 0;
+let myCorrect = false;
 let currentTimeLimit = 20;
 let timerInterval = null;
+let savedCode = '';
+let reactionSent = false;
+
+const EMOJIS = ['😎','🤩','🐱','🐶','🦊','🐸','🦁','🐯','🐻','🐼','🦄','🐲','🤖','👻','⚡','🔥'];
+
+// Build emoji grid
+const grid = document.getElementById('emoji-grid');
+EMOJIS.forEach(em => {
+  const btn = document.createElement('button');
+  btn.className = 'emoji-opt' + (em === myEmoji ? ' selected' : '');
+  btn.textContent = em;
+  btn.onclick = () => {
+    myEmoji = em;
+    document.querySelectorAll('.emoji-opt').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  };
+  grid.appendChild(btn);
+});
 
 // Pre-fill code from URL ?code=
 const urlCode = new URLSearchParams(window.location.search).get('code');
@@ -221,8 +285,6 @@ function show(id) {
   );
   document.getElementById(id).classList.remove('hidden');
 }
-
-let savedCode = '';
 
 function joinGame() {
   const code = document.getElementById('inp-code').value.trim().toUpperCase();
@@ -237,22 +299,21 @@ function joinGame() {
 function connectSocket(code, name) {
   if (socket) socket.disconnect();
   socket = io(API);
-  socket.emit('player:join', { code, name });
+  socket.emit('player:join', { code, name, emoji: myEmoji });
 
   socket.on('connect', () => {
-    if (savedCode && myName && document.getElementById('s-disconnected') &&
-        !document.getElementById('s-disconnected').classList.contains('hidden')) {
-      socket.emit('player:join', { code: savedCode, name: myName });
+    if (savedCode && myName && !document.getElementById('s-disconnected').classList.contains('hidden')) {
+      socket.emit('player:join', { code: savedCode, name: myName, emoji: myEmoji });
     }
   });
 
   socket.on('disconnect', () => {
     const active = ['s-lobby','s-question','s-wait','s-result'];
-    const anyActive = active.some(id => !document.getElementById(id).classList.contains('hidden'));
-    if (anyActive) show('s-disconnected');
+    if (active.some(id => !document.getElementById(id).classList.contains('hidden'))) show('s-disconnected');
   });
 
   socket.on('player:joined', ({ name }) => {
+    document.getElementById('lobby-avatar').textContent = myEmoji;
     document.getElementById('lobby-name').textContent = `Jugás como: ${name}`;
     show('s-lobby');
   });
@@ -264,21 +325,31 @@ function connectSocket(code, name) {
 
   socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
     currentTimeLimit = timeLimit;
+    myCorrect = false;
+    reactionSent = false;
+
+    // Prepare question content but keep buttons disabled until countdown ends
     document.getElementById('q-counter').textContent = `P ${index + 1}/${total}`;
     document.getElementById('q-text').textContent = text;
     document.getElementById('q-timer').textContent = timeLimit;
+    document.getElementById('timer-fill').style.width = '100%';
+    document.getElementById('timer-fill').style.background = 'var(--accent2)';
 
     const letters = ['A','B','C','D'];
     const colors = ['a0','a1','a2','a3'];
     document.getElementById('answers').innerHTML = options.map((opt, i) => `
-      <button class="ans-btn ${colors[i]}" onclick="sendAnswer(${i})">
+      <button class="ans-btn ${colors[i]}" onclick="sendAnswer(${i})" disabled>
         <span class="ans-letter">${letters[i]}</span>
         <span>${opt}</span>
       </button>
     `).join('');
 
-    startTimer(timeLimit);
     show('s-question');
+    showCountdown(() => {
+      // Enable buttons and start timer after countdown
+      document.querySelectorAll('.ans-btn').forEach(b => b.disabled = false);
+      startTimer(timeLimit);
+    });
   });
 
   socket.on('timer:tick', ({ timeLeft }) => {
@@ -286,14 +357,13 @@ function connectSocket(code, name) {
     const pct = (timeLeft / currentTimeLimit) * 100;
     const fill = document.getElementById('timer-fill');
     fill.style.width = pct + '%';
-    if (pct < 30) fill.style.background = '#e05555';
-    else fill.style.background = 'var(--accent2)';
+    fill.style.background = pct < 30 ? '#E63946' : 'var(--accent2)';
   });
 
   socket.on('player:answer:result', ({ correct, correctIndex, score }) => {
     myScore = score;
+    myCorrect = correct;
     clearInterval(timerInterval);
-    const letters = ['A','B','C','D'];
     document.querySelectorAll('.ans-btn').forEach((btn, i) => {
       btn.disabled = true;
       if (i === correctIndex) btn.classList.add('correct');
@@ -303,7 +373,12 @@ function connectSocket(code, name) {
   });
 
   socket.on('question:reveal', ({ correctIndex, ranking }) => {
-    const wasCorrect = false; // handled above
+    document.getElementById('r-icon').textContent = myCorrect ? '✅' : '❌';
+    document.getElementById('r-msg').textContent = myCorrect ? '¡Correcto!' : 'Incorrecto';
+    document.getElementById('r-pts').textContent = `Tu puntaje: ${myScore.toLocaleString()} pts`;
+    // Reset reactions
+    document.querySelectorAll('.react-btn').forEach(b => b.classList.remove('sent'));
+    reactionSent = false;
     showResult(ranking);
   });
 
@@ -313,6 +388,7 @@ function connectSocket(code, name) {
     document.getElementById('final-ranking').innerHTML = ranking.map((p, i) => `
       <div class="ranking-item ${p.name === myName ? 'rank-me' : ''}">
         <span class="rank-medal">${medals[i] || '#' + p.rank}</span>
+        <span style="font-size:18px">${p.emoji || ''}</span>
         <span class="rank-name">${p.name}</span>
         <span class="rank-score">${p.score.toLocaleString()}</span>
       </div>
@@ -321,9 +397,44 @@ function connectSocket(code, name) {
   });
 }
 
+function showCountdown(onDone) {
+  const overlay = document.getElementById('countdown-overlay');
+  const numEl = document.getElementById('countdown-num');
+  const steps = ['3','2','1','¡Ya!'];
+  let i = 0;
+  overlay.classList.remove('hidden');
+  numEl.textContent = steps[0];
+
+  const tick = setInterval(() => {
+    i++;
+    if (i >= steps.length) {
+      clearInterval(tick);
+      overlay.classList.add('hidden');
+      onDone();
+      return;
+    }
+    // re-trigger animation
+    numEl.style.animation = 'none';
+    void numEl.offsetWidth;
+    numEl.style.animation = '';
+    numEl.textContent = steps[i];
+  }, 800);
+}
+
 function sendAnswer(idx) {
   document.querySelectorAll('.ans-btn').forEach(b => b.disabled = true);
+  clearInterval(timerInterval);
   socket.emit('player:answer', { answerIndex: idx });
+}
+
+function sendReaction(emoji) {
+  if (reactionSent || !socket) return;
+  reactionSent = true;
+  socket.emit('player:react', { emoji });
+  document.querySelectorAll('.react-btn').forEach(b => {
+    if (b.textContent === emoji) b.classList.add('sent');
+    b.disabled = true;
+  });
 }
 
 function showResult(ranking) {
@@ -331,6 +442,7 @@ function showResult(ranking) {
   document.getElementById('r-ranking').innerHTML = ranking.map((p, i) => `
     <div class="ranking-item ${p.name === myName ? 'rank-me' : ''}">
       <span class="rank-medal">${medals[i] || '#' + p.rank}</span>
+      <span style="font-size:16px">${p.emoji || ''}</span>
       <span class="rank-name">${p.name}</span>
       <span class="rank-score">${p.score.toLocaleString()}</span>
     </div>
