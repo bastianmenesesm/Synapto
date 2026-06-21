@@ -13,16 +13,27 @@ const server = http.createServer(app);
 const JWT_SECRET = process.env.JWT_SECRET || 'synapto_dev_secret_change_in_prod';
 
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+  cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
 app.use(cors());
 app.use(express.json());
 
-// ─── Auth middleware ──────────────────────────────────────────────────────────
+// ─── Migrations ───────────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'user',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`); } catch {}
+try { db.exec(`ALTER TABLE quizzes ADD COLUMN user_id TEXT`); } catch {}
+
+// ─── Middleware ───────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No autenticado' });
@@ -34,19 +45,12 @@ function requireAuth(req, res, next) {
   }
 }
 
-// ─── Users table (ensure exists) ─────────────────────────────────────────────
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Acceso denegado' });
+  next();
+}
 
 // ─── Auth routes ──────────────────────────────────────────────────────────────
-
 app.post('/api/auth/register', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name?.trim() || !email?.trim() || !password) return res.status(400).json({ error: 'Todos los campos son requeridos' });
@@ -58,9 +62,11 @@ app.post('/api/auth/register', async (req, res) => {
 
   const id = uuidv4();
   const hash = await bcrypt.hash(password, 12);
-  db.prepare('INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)').run(id, name.trim(), email.toLowerCase().trim(), hash);
+  db.prepare('INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)').run(
+    id, name.trim(), email.toLowerCase().trim(), hash, 'user'
+  );
 
-  const user = { id, name: name.trim(), email: email.toLowerCase().trim() };
+  const user = { id, name: name.trim(), email: email.toLowerCase().trim(), role: 'user' };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user });
 });
@@ -75,66 +81,114 @@ app.post('/api/auth/login', async (req, res) => {
   const valid = await bcrypt.compare(password, row.password_hash);
   if (!valid) return res.status(401).json({ error: 'Email o contraseña incorrectos' });
 
-  const user = { id: row.id, name: row.name, email: row.email };
+  const user = { id: row.id, name: row.name, email: row.email, role: row.role || 'user' };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user });
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  const row = db.prepare('SELECT id, name, email, created_at FROM users WHERE id = ?').get(req.user.id);
+  const row = db.prepare('SELECT id, name, email, role, created_at FROM users WHERE id = ?').get(req.user.id);
   if (!row) return res.status(404).json({ error: 'Usuario no encontrado' });
   res.json(row);
 });
 
-// ─── In-memory game state ────────────────────────────────────────────────────
-const games = {}; // gameCode → gameState
+app.put('/api/auth/profile', requireAuth, async (req, res) => {
+  const { name, currentPassword, newPassword } = req.body;
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!row) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+  if (newPassword) {
+    if (!currentPassword) return res.status(400).json({ error: 'Ingresá tu contraseña actual' });
+    const valid = await bcrypt.compare(currentPassword, row.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+    if (newPassword.length < 8) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+    const hash = await bcrypt.hash(newPassword, 12);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
+  }
+
+  const newName = name?.trim() || row.name;
+  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(newName, req.user.id);
+
+  const user = { id: row.id, name: newName, email: row.email, role: row.role || 'user' };
+  const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user });
+});
+
+// ─── Admin: user management ───────────────────────────────────────────────────
+app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
+  const users = db.prepare(`
+    SELECT u.id, u.name, u.email, u.role, u.created_at,
+           COUNT(q.id) as quiz_count
+    FROM users u
+    LEFT JOIN quizzes q ON q.user_id = u.id
+    GROUP BY u.id
+    ORDER BY u.created_at ASC
+  `).all();
+  res.json(users);
+});
+
+app.put('/api/admin/users/:id/role', requireAuth, requireAdmin, (req, res) => {
+  const { role } = req.body;
+  if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'Rol inválido' });
+  if (req.params.id === req.user.id) return res.status(400).json({ error: 'No podés cambiar tu propio rol' });
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+  if (req.params.id === req.user.id) return res.status(400).json({ error: 'No podés eliminar tu propia cuenta' });
+  const quizzes = db.prepare('SELECT id FROM quizzes WHERE user_id = ?').all(req.params.id);
+  quizzes.forEach(q => db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(q.id));
+  db.prepare('DELETE FROM quizzes WHERE user_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── In-memory game state ─────────────────────────────────────────────────────
+const games = {};
 
 function createGameState(quizId) {
   return {
     quizId,
-    status: 'lobby',       // lobby | question | results | finished
+    status: 'lobby',
     currentQuestion: -1,
-    players: {},           // socketId → { name, score, answered }
+    players: {},
     questionTimer: null,
     timeLeft: 0,
+    lastReveal: null,
+    lastRanking: null,
   };
 }
 
-// ─── REST API ────────────────────────────────────────────────────────────────
-
-// Health check
+// ─── REST API ─────────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// Get all quizzes
 app.get('/api/quizzes', requireAuth, (req, res) => {
   const quizzes = db.prepare(`
     SELECT q.*, COUNT(qs.id) as question_count
     FROM quizzes q
     LEFT JOIN questions qs ON q.id = qs.quiz_id
+    WHERE q.user_id = ?
     GROUP BY q.id
     ORDER BY q.created_at DESC
-  `).all();
+  `).all(req.user.id);
   res.json(quizzes);
 });
 
-// Get quiz with questions
 app.get('/api/quizzes/:id', requireAuth, (req, res) => {
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
   const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(quiz.id);
-  questions.forEach(q => {
-    q.options = JSON.parse(q.options);
-  });
+  questions.forEach(q => { q.options = JSON.parse(q.options); });
   res.json({ ...quiz, questions });
 });
 
-// Create quiz
 app.post('/api/quizzes', requireAuth, (req, res) => {
   const { title, questions } = req.body;
   if (!title || !questions?.length) return res.status(400).json({ error: 'Título y preguntas requeridos' });
 
   const id = uuidv4();
-  db.prepare('INSERT INTO quizzes (id, title) VALUES (?, ?)').run(id, title);
+  db.prepare('INSERT INTO quizzes (id, title, user_id) VALUES (?, ?, ?)').run(id, title, req.user.id);
 
   const insertQ = db.prepare(`
     INSERT INTO questions (id, quiz_id, text, options, correct_index, time_limit, position)
@@ -147,10 +201,9 @@ app.post('/api/quizzes', requireAuth, (req, res) => {
   res.json({ id });
 });
 
-// Update quiz
 app.put('/api/quizzes/:id', requireAuth, (req, res) => {
   const { title, questions } = req.body;
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
 
   db.prepare('UPDATE quizzes SET title = ? WHERE id = ?').run(title, req.params.id);
@@ -167,25 +220,24 @@ app.put('/api/quizzes/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Delete quiz
 app.delete('/api/quizzes/:id', requireAuth, (req, res) => {
+  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
   db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
   db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
-// Create game session (returns game code + QR)
 app.post('/api/games', requireAuth, async (req, res) => {
   const { quizId, baseUrl } = req.body;
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(quizId);
+  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(quizId, req.user.id);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
 
   const code = Math.random().toString(36).substring(2, 8).toUpperCase();
   const joinUrl = `${baseUrl || process.env.FRONTEND_URL || 'http://localhost:3000'}/player?code=${code}`;
 
   const qrDataUrl = await QRCode.toDataURL(joinUrl, {
-    width: 300,
-    margin: 2,
+    width: 300, margin: 2,
     color: { dark: '#1a1a2e', light: '#ffffff' }
   });
 
@@ -195,22 +247,15 @@ app.post('/api/games', requireAuth, async (req, res) => {
   res.json({ code, joinUrl, qr: qrDataUrl });
 });
 
-// Get game state (for reconnects)
 app.get('/api/games/:code', (req, res) => {
   const game = games[req.params.code];
   if (!game) return res.status(404).json({ error: 'Sala no encontrada' });
-  res.json({
-    status: game.status,
-    playerCount: Object.keys(game.players).length,
-    joinUrl: game.joinUrl
-  });
+  res.json({ status: game.status, playerCount: Object.keys(game.players).length, joinUrl: game.joinUrl });
 });
 
-// ─── WebSocket ───────────────────────────────────────────────────────────────
-
+// ─── WebSocket ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
 
-  // Admin joins room
   socket.on('admin:join', ({ code }) => {
     const game = games[code];
     if (!game) return socket.emit('error', 'Sala no encontrada');
@@ -224,7 +269,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Player joins
   socket.on('player:join', ({ code, name, emoji }) => {
     const game = games[code];
     if (!game) return socket.emit('error', 'Sala no encontrada');
@@ -244,7 +288,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Player reaction
   socket.on('player:react', ({ emoji }) => {
     const code = socket.gameCode;
     const game = games[code];
@@ -254,7 +297,6 @@ io.on('connection', (socket) => {
     io.to(`game:${code}`).emit('reaction:new', { emoji, playerName: player.name });
   });
 
-  // Screen joins (projector view)
   socket.on('screen:join', ({ code }) => {
     const game = games[code];
     if (!game) return socket.emit('error', 'Sala no encontrada');
@@ -290,7 +332,6 @@ io.on('connection', (socket) => {
     socket.emit('screen:state', payload);
   });
 
-  // Admin: start game / next question
   socket.on('admin:next', () => {
     const code = socket.gameCode;
     const game = games[code];
@@ -300,7 +341,6 @@ io.on('connection', (socket) => {
     game.currentQuestion++;
 
     if (game.currentQuestion >= questions.length) {
-      // Game over
       game.status = 'finished';
       clearInterval(game.questionTimer);
       const ranking = Object.values(game.players)
@@ -316,7 +356,6 @@ io.on('connection', (socket) => {
     game.status = 'question';
     game.timeLeft = q.time_limit;
 
-    // Reset answered flag for all players
     Object.values(game.players).forEach(p => { p.answered = false; p.lastAnswer = null; });
 
     const questionPayload = {
@@ -329,7 +368,6 @@ io.on('connection', (socket) => {
 
     io.to(`game:${code}`).emit('question:start', questionPayload);
 
-    // Timer
     clearInterval(game.questionTimer);
     game.questionTimer = setInterval(() => {
       game.timeLeft--;
@@ -341,7 +379,6 @@ io.on('connection', (socket) => {
     }, 1000);
   });
 
-  // Player answers
   socket.on('player:answer', ({ answerIndex }) => {
     const code = socket.gameCode;
     const game = games[code];
@@ -361,13 +398,8 @@ io.on('connection', (socket) => {
       player.score += 500 + bonus;
     }
 
-    socket.emit('player:answer:result', {
-      correct,
-      correctIndex: q.correct_index,
-      score: player.score
-    });
+    socket.emit('player:answer:result', { correct, correctIndex: q.correct_index, score: player.score });
 
-    // Check if all players answered
     const allAnswered = Object.values(game.players).every(p => p.answered);
     if (allAnswered) {
       clearInterval(game.questionTimer);
@@ -375,7 +407,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin skip timer
   socket.on('admin:reveal', () => {
     const code = socket.gameCode;
     const game = games[code];
@@ -385,7 +416,6 @@ io.on('connection', (socket) => {
     revealAnswers(code, questions[game.currentQuestion]);
   });
 
-  // Disconnect
   socket.on('disconnect', () => {
     const code = socket.gameCode;
     if (!code || !games[code]) return;
@@ -414,21 +444,11 @@ function revealAnswers(code, q) {
     .slice(0, 5)
     .map((p, i) => ({ rank: i + 1, name: p.name, emoji: p.emoji, score: p.score }));
 
-  game.lastReveal = {
-    correctIndex: q.correct_index,
-    tally,
-    ranking,
-    questionText: q.text,
-    options
-  };
+  game.lastReveal = { correctIndex: q.correct_index, tally, ranking, questionText: q.text, options };
 
-  io.to(`game:${code}`).emit('question:reveal', {
-    correctIndex: q.correct_index,
-    tally,
-    ranking
-  });
+  io.to(`game:${code}`).emit('question:reveal', { correctIndex: q.correct_index, tally, ranking });
 }
 
-// ─── Start ───────────────────────────────────────────────────────────────────
+// ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log(`Synapto backend running on port ${PORT}`));

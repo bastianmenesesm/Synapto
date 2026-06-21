@@ -201,6 +201,14 @@
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         <span class="nav-label">Nuevo quiz</span>
       </div>
+      <div class="nav-item" onclick="showView('account')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <span class="nav-label">Mi cuenta</span>
+      </div>
+      <div class="nav-item" id="nav-users" style="display:none" onclick="showView('users')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"/></svg>
+        <span class="nav-label">Usuarios</span>
+      </div>
     </nav>
 
     <div style="margin-top:auto;border-top:1px solid var(--border);padding:16px">
@@ -346,6 +354,61 @@ Berlín
       </div>
     </div>
 
+    <!-- ── Mi cuenta ── -->
+    <div id="view-account" class="view">
+      <div class="page-header">
+        <h2 class="page-title">Mi cuenta</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:800px">
+
+        <!-- Editar perfil -->
+        <div class="card">
+          <h3 style="font-size:15px;font-weight:600;margin-bottom:16px">Información personal</h3>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Nombre</label>
+            <input type="text" id="acc-name" placeholder="Tu nombre"/>
+          </div>
+          <div class="form-group" style="margin-bottom:16px">
+            <label>Email</label>
+            <input type="text" id="acc-email" disabled style="opacity:.5;cursor:not-allowed"/>
+          </div>
+          <div id="acc-profile-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;display:none"></div>
+          <button class="btn btn-primary" onclick="saveProfile()">Guardar cambios</button>
+        </div>
+
+        <!-- Cambiar contraseña -->
+        <div class="card">
+          <h3 style="font-size:15px;font-weight:600;margin-bottom:16px">Cambiar contraseña</h3>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Contraseña actual</label>
+            <input type="password" id="acc-current-pw" placeholder="••••••••"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Nueva contraseña</label>
+            <input type="password" id="acc-new-pw" placeholder="Mínimo 8 caracteres"/>
+          </div>
+          <div class="form-group" style="margin-bottom:16px">
+            <label>Confirmar nueva contraseña</label>
+            <input type="password" id="acc-confirm-pw" placeholder="Repetí la nueva contraseña"/>
+          </div>
+          <div id="acc-pw-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;display:none"></div>
+          <button class="btn btn-primary" onclick="changePassword()">Cambiar contraseña</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Gestión de usuarios (admin) ── -->
+    <div id="view-users" class="view">
+      <div class="page-header">
+        <h2 class="page-title">Usuarios registrados</h2>
+        <button class="btn btn-ghost" onclick="loadUsers()">↻ Actualizar</button>
+      </div>
+      <div id="users-table-wrap">
+        <div class="empty"><div class="empty-icon">👥</div><p>Cargando usuarios…</p></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -373,6 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (el && _user.name) el.textContent = _user.name;
   const av = document.getElementById('user-avatar');
   if (av && _user.name) av.textContent = _user.name.charAt(0).toUpperCase();
+  if (_user.role === 'admin') document.getElementById('nav-users').style.display = 'flex';
+  if (localStorage.getItem('sidebar-collapsed') === '1') document.getElementById('shell').classList.add('collapsed');
 });
 
 function authFetch(url, opts = {}) {
@@ -397,6 +462,138 @@ function toggleSidebar() {
   localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
 }
 
+// ── Mi cuenta ─────────────────────────────────────────────────────────────────
+function loadAccount() {
+  document.getElementById('acc-name').value = _user.name || '';
+  document.getElementById('acc-email').value = _user.email || '';
+  document.getElementById('acc-current-pw').value = '';
+  document.getElementById('acc-new-pw').value = '';
+  document.getElementById('acc-confirm-pw').value = '';
+  document.getElementById('acc-profile-error').style.display = 'none';
+  document.getElementById('acc-pw-error').style.display = 'none';
+}
+
+async function saveProfile() {
+  const name = document.getElementById('acc-name').value.trim();
+  const errEl = document.getElementById('acc-profile-error');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'El nombre no puede estar vacío'; errEl.style.display = 'block'; return; }
+
+  try {
+    const res = await authFetch(`${API}/auth/profile`, { method: 'PUT', body: JSON.stringify({ name }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    localStorage.setItem('synapto_token', data.token);
+    localStorage.setItem('synapto_user', JSON.stringify(data.user));
+    Object.assign(_user, data.user);
+    document.getElementById('user-name').textContent = data.user.name;
+    document.getElementById('user-avatar').textContent = data.user.name.charAt(0).toUpperCase();
+    toast('Nombre actualizado ✓');
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+}
+
+async function changePassword() {
+  const currentPassword = document.getElementById('acc-current-pw').value;
+  const newPassword = document.getElementById('acc-new-pw').value;
+  const confirmPassword = document.getElementById('acc-confirm-pw').value;
+  const errEl = document.getElementById('acc-pw-error');
+  errEl.style.display = 'none';
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    errEl.textContent = 'Completá todos los campos'; errEl.style.display = 'block'; return;
+  }
+  if (newPassword !== confirmPassword) {
+    errEl.textContent = 'Las contraseñas no coinciden'; errEl.style.display = 'block'; return;
+  }
+  if (newPassword.length < 8) {
+    errEl.textContent = 'La nueva contraseña debe tener al menos 8 caracteres'; errEl.style.display = 'block'; return;
+  }
+
+  try {
+    const res = await authFetch(`${API}/auth/profile`, { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    localStorage.setItem('synapto_token', data.token);
+    document.getElementById('acc-current-pw').value = '';
+    document.getElementById('acc-new-pw').value = '';
+    document.getElementById('acc-confirm-pw').value = '';
+    toast('Contraseña actualizada ✓');
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+}
+
+// ── Gestión de usuarios (admin) ───────────────────────────────────────────────
+async function loadUsers() {
+  const wrap = document.getElementById('users-table-wrap');
+  wrap.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div><p>Cargando…</p></div>';
+  try {
+    const res = await authFetch(`${API}/admin/users`);
+    if (res.status === 403) { wrap.innerHTML = '<div class="empty"><p>Sin acceso.</p></div>'; return; }
+    const users = await res.json();
+    if (!users.length) { wrap.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><p>No hay usuarios.</p></div>'; return; }
+
+    wrap.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+            <th style="padding:10px 14px">Usuario</th>
+            <th style="padding:10px 14px">Email</th>
+            <th style="padding:10px 14px">Quizzes</th>
+            <th style="padding:10px 14px">Registro</th>
+            <th style="padding:10px 14px">Rol</th>
+            <th style="padding:10px 14px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => `
+            <tr style="border-bottom:1px solid var(--border)" id="user-row-${u.id}">
+              <td style="padding:12px 14px;font-weight:600">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">
+                    ${u.name.charAt(0).toUpperCase()}
+                  </div>
+                  ${u.name} ${u.id === _user.id ? '<span style="font-size:11px;color:var(--accent2);margin-left:4px">(tú)</span>' : ''}
+                </div>
+              </td>
+              <td style="padding:12px 14px;color:var(--muted)">${u.email}</td>
+              <td style="padding:12px 14px;text-align:center">${u.quiz_count}</td>
+              <td style="padding:12px 14px;color:var(--muted)">${new Date(u.created_at).toLocaleDateString('es-CL')}</td>
+              <td style="padding:12px 14px">
+                <select onchange="changeUserRole('${u.id}', this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:13px;${u.id === _user.id ? 'opacity:.4;pointer-events:none' : ''}">
+                  <option value="user" ${u.role !== 'admin' ? 'selected' : ''}>Usuario</option>
+                  <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                </select>
+              </td>
+              <td style="padding:12px 14px">
+                ${u.id !== _user.id ? `<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}', '${u.name}')">Eliminar</button>` : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) { wrap.innerHTML = `<div class="empty"><p>Error: ${e.message}</p></div>`; }
+}
+
+async function changeUserRole(userId, role) {
+  try {
+    const res = await authFetch(`${API}/admin/users/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    toast(`Rol actualizado a ${role} ✓`);
+  } catch (e) { toast(e.message); loadUsers(); }
+}
+
+async function deleteUser(userId, userName) {
+  if (!confirm(`¿Eliminar a "${userName}" y todos sus quizzes? Esta acción no se puede deshacer.`)) return;
+  try {
+    const res = await authFetch(`${API}/admin/users/${userId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    document.getElementById(`user-row-${userId}`)?.remove();
+    toast(`Usuario "${userName}" eliminado`);
+  } catch (e) { toast(e.message); }
+}
+
 (function initSidebar() {
   if (localStorage.getItem('sidebar-collapsed') === '1') {
     document.getElementById('shell').classList.add('collapsed');
@@ -407,8 +604,12 @@ function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  if (name === 'quizzes') { loadQuizzes(); document.querySelectorAll('.nav-item')[0].classList.add('active'); }
-  if (name === 'create') { document.querySelectorAll('.nav-item')[1].classList.add('active'); }
+  const navMap = { quizzes: 0, create: 1, account: 2, users: 3 };
+  const idx = navMap[name];
+  if (idx !== undefined) document.querySelectorAll('.nav-item')[idx]?.classList.add('active');
+  if (name === 'quizzes') loadQuizzes();
+  if (name === 'account') loadAccount();
+  if (name === 'users') loadUsers();
 }
 
 function toast(msg, err = false) {
