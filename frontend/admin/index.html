@@ -229,6 +229,64 @@
     .ob-step-label { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px; }
     .ob-highlight { outline: 2.5px solid var(--accent2) !important; outline-offset: 5px !important; border-radius: 8px; position: relative; z-index: 505 !important; }
 
+    /* ─── Question card redesign ────────────────────────────────── */
+    .q-drag-handle { cursor: grab; color: var(--muted); font-size: 18px; padding: 2px 6px; border-radius: 4px; line-height: 1; user-select: none; }
+    .q-drag-handle:hover { background: var(--surface2); color: var(--text); }
+    .q-card.drag-over { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(78,205,196,0.3); }
+    .q-card.dragging { opacity: 0.4; }
+    .q-card.invalid { border-color: var(--danger) !important; }
+    .q-card.invalid .q-num::after { content: ' · Completá este campo'; color: var(--danger); font-weight: 500; }
+
+    /* Collapsible */
+    .q-card-body { }
+    .q-card.collapsed .q-card-body { display: none; }
+    .q-summary { display: none; padding: 4px 0 2px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .q-card.collapsed .q-summary { display: block; }
+    .q-collapse-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .q-collapse-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Option rows — clickable */
+    .opt-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .opt-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 2px solid var(--border); background: var(--surface2); cursor: pointer; transition: border-color .15s, background .15s; }
+    .opt-row:hover { border-color: var(--accent); }
+    .opt-row.correct { border-color: var(--success); background: rgba(81,207,102,0.08); }
+    .opt-row .opt-letter { width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; transition: transform .15s; }
+    .opt-row.correct .opt-letter { transform: scale(1.08); }
+    .opt-row .opt-input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 14px; outline: none; min-width: 0; cursor: text; }
+    .opt-row .opt-input::placeholder { color: var(--muted); }
+    .opt-row .opt-check { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; transition: all .15s; color: transparent; }
+    .opt-row.correct .opt-check { background: var(--success); border-color: var(--success); color: #fff; }
+    .opt-row-0 .opt-letter { background: rgba(230,57,70,0.18); color: #E63946; }
+    .opt-row-1 .opt-letter { background: rgba(33,150,243,0.18); color: #2196F3; }
+    .opt-row-2 .opt-letter { background: rgba(255,152,0,0.18); color: #FF9800; }
+    .opt-row-3 .opt-letter { background: rgba(76,175,80,0.18); color: #4CAF50; }
+
+    /* Time presets */
+    .time-presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+    .time-preset { background: var(--surface2); border: 1.5px solid var(--border); color: var(--muted); border-radius: 8px; padding: 5px 13px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .time-preset:hover { border-color: var(--accent2); color: var(--accent2); }
+    .time-preset.active { background: rgba(78,205,196,0.12); border-color: var(--accent2); color: var(--accent2); }
+    .time-custom-input { max-width: 84px; display: none; }
+    .time-custom-input.show { display: block; }
+
+    /* Import panel tabs */
+    .import-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .import-tab { padding: 8px 14px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; border-radius: 4px 4px 0 0; }
+    .import-tab:hover { color: var(--text); }
+    .import-tab.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+    .import-panel { display: none; }
+    .import-panel.active { display: block; }
+    .import-counter { font-size: 12px; color: var(--accent2); font-weight: 600; min-height: 16px; margin-top: 6px; }
+
+    /* AI prompt cards */
+    .ai-prompt-card { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+    .ai-prompt-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .ai-prompt-card .ai-desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+    .ai-prompt-snippet { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 12px; font-family: monospace; color: var(--accent2); white-space: pre-wrap; margin-bottom: 8px; max-height: 90px; overflow: hidden; }
+    .ai-copy-btn { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    .ai-copy-btn:hover { opacity: .85; }
+    .ai-copy-btn.copied { background: var(--success); }
+
     /* ─── Stats modal ───────────────────────────────────────────── */
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
     .stats-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; text-align: center; }
@@ -351,18 +409,28 @@
         </div>
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <label>Preguntas</label>
+            <label>Preguntas <span id="q-count-label" style="font-size:12px;color:var(--muted);font-weight:400"></span></label>
             <div style="display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" onclick="toggleImport()">📋 Importar texto</button>
-              <button class="btn btn-ghost btn-sm" onclick="addQuestion()">+ Agregar pregunta</button>
+              <button class="btn btn-ghost btn-sm" id="btn-import-toggle" onclick="toggleImport()">⬆ Importar</button>
+              <button class="btn btn-primary btn-sm" onclick="addQuestion()">+ Agregar</button>
             </div>
           </div>
-          <div id="import-box" style="display:none;margin-bottom:16px">
-            <div class="card" style="padding:16px">
-              <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
-                Pegá tus preguntas en este formato. Separá cada pregunta con una línea en blanco. Marcá la respuesta correcta con <strong>*</strong> al final.
-              </p>
-              <pre style="font-size:12px;color:var(--accent2);margin-bottom:12px;background:var(--bg);padding:10px;border-radius:8px">¿Cuál es la capital de Francia?
+
+          <!-- Import panel (tabbed) -->
+          <div id="import-box" style="display:none;margin-bottom:20px">
+            <div class="card" style="padding:16px 20px">
+              <div class="import-tabs">
+                <div class="import-tab active" onclick="switchImportTab('text',this)">📋 Texto</div>
+                <div class="import-tab" onclick="switchImportTab('csv',this)">📊 CSV</div>
+                <div class="import-tab" onclick="switchImportTab('ai',this)">🤖 IA / Prompts</div>
+              </div>
+
+              <!-- Tab: Texto -->
+              <div id="import-panel-text" class="import-panel active">
+                <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+                  Separá cada pregunta con una línea en blanco. Marcá la correcta con <strong style="color:var(--accent2)">*</strong> al final de la opción.
+                </p>
+                <pre style="font-size:12px;color:var(--accent2);margin-bottom:10px;background:var(--bg);padding:10px;border-radius:8px;line-height:1.6">¿Cuál es la capital de Francia?
 París*
 Londres
 Madrid
@@ -373,10 +441,96 @@ Berlín
 3
 5
 6</pre>
-              <textarea id="import-text" style="min-height:180px;font-family:monospace;font-size:13px" placeholder="Pegá tus preguntas aquí..."></textarea>
-              <div style="display:flex;gap:8px;margin-top:10px">
-                <button class="btn btn-primary btn-sm" onclick="importQuestions()">Importar</button>
-                <button class="btn btn-ghost btn-sm" onclick="toggleImport()">Cancelar</button>
+                <textarea id="import-text" style="min-height:160px;font-family:monospace;font-size:13px" placeholder="Pegá tus preguntas aquí..." oninput="updateImportCounter()"></textarea>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+                  <div class="import-counter" id="import-counter"></div>
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn-primary btn-sm" onclick="importQuestions()">Importar</button>
+                    <button class="btn btn-ghost btn-sm" onclick="toggleImport()">Cancelar</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab: CSV -->
+              <div id="import-panel-csv" class="import-panel">
+                <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+                  Pegá o subí un CSV con columnas: <strong style="color:var(--accent2)">pregunta, opcion_a, opcion_b, opcion_c, opcion_d, correcta</strong><br>
+                  <span style="font-size:12px">La columna "correcta" acepta A, B, C o D (o 0, 1, 2, 3).</span>
+                </p>
+                <pre style="font-size:12px;color:var(--accent2);margin-bottom:10px;background:var(--bg);padding:10px;border-radius:8px">pregunta,opcion_a,opcion_b,opcion_c,opcion_d,correcta
+¿Capital de Francia?,París,Londres,Madrid,Berlín,A
+¿Cuánto es 2+2?,4,3,5,6,A</pre>
+                <textarea id="import-csv" style="min-height:140px;font-family:monospace;font-size:13px" placeholder="Pegá el CSV aquí o subí un archivo..." oninput="updateCSVCounter()"></textarea>
+                <div style="margin-top:8px;display:flex;align-items:center;gap:10px">
+                  <input type="file" id="csv-file" accept=".csv,.txt" style="display:none" onchange="loadCSVFile(this)"/>
+                  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('csv-file').click()">📂 Subir archivo</button>
+                  <div class="import-counter" id="csv-counter" style="flex:1"></div>
+                  <button class="btn btn-primary btn-sm" onclick="importCSV()">Importar CSV</button>
+                  <button class="btn btn-ghost btn-sm" onclick="toggleImport()">Cancelar</button>
+                </div>
+              </div>
+
+              <!-- Tab: IA / Prompts -->
+              <div id="import-panel-ai" class="import-panel">
+                <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+                  Copiá uno de estos prompts, pegalo en <strong>ChatGPT, Claude o Gemini</strong>, reemplazá <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px">[TEMA]</code>, y pegá el resultado en la pestaña Texto.
+                </p>
+
+                <div class="ai-prompt-card">
+                  <h4>🎯 Quiz general (10 preguntas)</h4>
+                  <div class="ai-desc">Ideal para trivia, cultura general, historia, ciencias.</div>
+                  <div class="ai-prompt-snippet" id="prompt-1">Generá 10 preguntas de trivia sobre [TEMA] en español, con 4 opciones cada una. Marcá la correcta con * al final. Una pregunta por bloque, separadas por línea en blanco. Formato exacto:
+
+¿Pregunta?
+Opción correcta*
+Opción incorrecta 1
+Opción incorrecta 2
+Opción incorrecta 3</div>
+                  <button class="ai-copy-btn" onclick="copyPrompt(this,'prompt-1')">Copiar prompt</button>
+                </div>
+
+                <div class="ai-prompt-card">
+                  <h4>🏢 Capacitación / empresa (8 preguntas)</h4>
+                  <div class="ai-desc">Para onboarding, políticas, productos, procesos internos.</div>
+                  <div class="ai-prompt-snippet" id="prompt-2">Creá 8 preguntas de evaluación sobre [TEMA] en español. Las preguntas deben medir comprensión, no solo memoria. 4 opciones por pregunta. Marcá la correcta con * al final. Separalas con línea en blanco. Formato exacto:
+
+¿Pregunta?
+Respuesta correcta*
+Distractor 1
+Distractor 2
+Distractor 3</div>
+                  <button class="ai-copy-btn" onclick="copyPrompt(this,'prompt-2')">Copiar prompt</button>
+                </div>
+
+                <div class="ai-prompt-card">
+                  <h4>✅ Verdadero / Falso (6 preguntas)</h4>
+                  <div class="ai-desc">Preguntas rápidas con solo 2 opciones.</div>
+                  <div class="ai-prompt-snippet" id="prompt-3">Generá 6 afirmaciones sobre [TEMA], mitad verdaderas y mitad falsas. Presentalas como preguntas con 2 opciones. Marcá la correcta con *. Separalas con línea en blanco. Formato exacto:
+
+¿[Afirmación es correcta]?
+Verdadero*
+Falso
+
+¿[Afirmación es falsa]?
+Falso*
+Verdadero</div>
+                  <button class="ai-copy-btn" onclick="copyPrompt(this,'prompt-3')">Copiar prompt</button>
+                </div>
+
+                <div class="ai-prompt-card">
+                  <h4>⚡ Quiz rápido (5 preguntas, 15s c/u)</h4>
+                  <div class="ai-desc">Preguntas cortas para sesiones dinámicas.</div>
+                  <div class="ai-prompt-snippet" id="prompt-4">Creá 5 preguntas MUY breves (máx 10 palabras cada una) sobre [TEMA] en español. Respuestas también breves. 4 opciones, marcá la correcta con *. Línea en blanco entre preguntas. Formato exacto:
+
+¿Pregunta corta?
+Respuesta*
+Opción 2
+Opción 3
+Opción 4</div>
+                  <button class="ai-copy-btn" onclick="copyPrompt(this,'prompt-4')">Copiar prompt</button>
+                </div>
+
+                <p style="font-size:12px;color:var(--muted);margin-top:4px">💡 Después de generar, copiá el resultado y pegalo en la pestaña <strong>Texto</strong>.</p>
               </div>
             </div>
           </div>
@@ -844,55 +998,156 @@ async function duplicateQuiz(id) {
   loadQuizzes();
 }
 
+const OPT_LABEL_LETTERS = ['A','B','C','D'];
+const PRESET_TIMES = [10, 20, 30, 60];
+let _dragCard = null;
+
 function addQuestion(data = null) {
   const list = document.getElementById('questions-list');
   const idx = list.children.length;
-  const labels = ['A', 'B', 'C', 'D'];
-  const colors = ['dot-0','dot-1','dot-2','dot-3'];
+  const correctIdx = data ? (data.correctIndex ?? data.correct_index ?? 0) : 0;
+  const timeVal = data ? (data.timeLimit || data.time_limit || 20) : 20;
+
   const div = document.createElement('div');
   div.className = 'q-card';
   div.dataset.idx = idx;
+
+  const presetsHtml = PRESET_TIMES.map(t =>
+    `<button type="button" class="time-preset ${t === timeVal ? 'active' : ''}" onclick="setTime(this,${t})">${t}s</button>`
+  ).join('');
+  const customActive = !PRESET_TIMES.includes(timeVal);
+
   div.innerHTML = `
     <div class="q-card-header">
-      <span class="q-num">Pregunta ${idx + 1}</span>
-      <button class="btn btn-danger btn-sm" onclick="removeQuestion(this)">Eliminar</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="q-drag-handle" title="Arrastrar para reordenar">⠿</span>
+        <span class="q-num">Pregunta ${idx + 1}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button type="button" class="q-collapse-btn" onclick="toggleCollapse(this)" title="Colapsar">▲</button>
+        <button class="btn btn-danger btn-sm" onclick="removeQuestion(this)">Eliminar</button>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Enunciado</label>
-      <textarea placeholder="¿Cuál es la capital de Francia?" class="q-text">${data ? data.text : ''}</textarea>
-    </div>
-    <div class="form-group" style="margin-top:8px">
-      <label>Tiempo límite (segundos)</label>
-      <input type="number" class="q-time" value="${data ? data.timeLimit : 20}" min="5" max="120" style="max-width:120px"/>
-    </div>
-    <div class="options-grid">
-      ${labels.map((lbl, i) => `
-        <div class="option-row">
-          <div class="option-dot ${colors[i]} ${data && data.correctIndex === i ? 'correct' : ''}" onclick="setCorrect(this, ${i})" title="Marcar como correcta">${lbl}</div>
-          <input type="text" class="option-input q-option" placeholder="Opción ${lbl}" value="${data ? (data.options[i] || '') : ''}"/>
+    <div class="q-summary"></div>
+    <div class="q-card-body">
+      <div class="form-group">
+        <label>Enunciado</label>
+        <textarea class="q-text" placeholder="¿Cuál es la capital de Francia?" oninput="updateSummary(this)">${data ? data.text : ''}</textarea>
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label>Tiempo límite</label>
+        <div class="time-presets">
+          ${presetsHtml}
+          <button type="button" class="time-preset ${customActive ? 'active' : ''}" onclick="setTime(this,'custom')">Personalizado</button>
+          <input type="number" class="time-custom-input q-time-hidden ${customActive ? 'show' : ''}" value="${timeVal}" min="5" max="300" placeholder="seg"/>
         </div>
-      `).join('')}
+      </div>
+      <div class="opt-rows">
+        ${OPT_LABEL_LETTERS.map((lbl, i) => `
+          <div class="opt-row opt-row-${i} ${i === correctIdx ? 'correct' : ''}" onclick="setCorrect(this)">
+            <div class="opt-letter">${lbl}</div>
+            <input type="text" class="opt-input q-option" placeholder="Opción ${lbl}" value="${data ? (data.options[i] || '') : ''}" onclick="event.stopPropagation()"/>
+            <div class="opt-check">✓</div>
+          </div>
+        `).join('')}
+      </div>
+      <input type="hidden" class="q-correct" value="${correctIdx}"/>
     </div>
-    <input type="hidden" class="q-correct" value="${data ? data.correctIndex : 0}"/>
   `;
+
   list.appendChild(div);
+  _initDrag(div);
+  _updateQCountLabel();
+  if (data?.text) updateSummary(div.querySelector('.q-text'));
 }
 
-function setCorrect(el, idx) {
-  const card = el.closest('.q-card');
-  card.querySelectorAll('.option-dot').forEach(d => d.classList.remove('correct'));
-  el.classList.add('correct');
-  card.querySelector('.q-correct').value = idx;
+function setCorrect(rowEl) {
+  const card = rowEl.closest('.q-card');
+  card.querySelectorAll('.opt-row').forEach((r, i) => {
+    const isThis = r === rowEl;
+    r.classList.toggle('correct', isThis);
+    if (isThis) card.querySelector('.q-correct').value = i;
+  });
+}
+
+function setTime(btn, val) {
+  const card = btn.closest('.q-card');
+  card.querySelectorAll('.time-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const customInput = card.querySelector('.time-custom-input');
+  if (val === 'custom') {
+    customInput.classList.add('show');
+    customInput.focus();
+  } else {
+    customInput.classList.remove('show');
+    customInput.value = val;
+  }
+}
+
+function toggleCollapse(btn) {
+  const card = btn.closest('.q-card');
+  const collapsed = card.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▼' : '▲';
+}
+
+function updateSummary(textarea) {
+  const card = textarea.closest('.q-card');
+  const summary = card.querySelector('.q-summary');
+  if (summary) summary.textContent = textarea.value || '(sin enunciado)';
 }
 
 function removeQuestion(btn) {
   btn.closest('.q-card').remove();
   renumberQuestions();
+  _updateQCountLabel();
 }
 
 function renumberQuestions() {
   document.querySelectorAll('.q-card').forEach((c, i) => {
+    c.dataset.idx = i;
     c.querySelector('.q-num').textContent = `Pregunta ${i + 1}`;
+  });
+}
+
+function _updateQCountLabel() {
+  const n = document.querySelectorAll('.q-card').length;
+  const el = document.getElementById('q-count-label');
+  if (el) el.textContent = n ? `(${n})` : '';
+}
+
+// ─── Drag & drop reorder ───────────────────────────────────────────────────────
+function _initDrag(card) {
+  const handle = card.querySelector('.q-drag-handle');
+  handle.addEventListener('mousedown', () => card.setAttribute('draggable', 'true'));
+  handle.addEventListener('mouseup',   () => card.setAttribute('draggable', 'false'));
+  card.addEventListener('dragstart', function() {
+    _dragCard = this;
+    setTimeout(() => this.classList.add('dragging'), 0);
+  });
+  card.addEventListener('dragend', function() {
+    this.classList.remove('dragging');
+    this.setAttribute('draggable', 'false');
+    document.querySelectorAll('.q-card').forEach(c => c.classList.remove('drag-over'));
+    _dragCard = null;
+  });
+  card.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    if (this !== _dragCard) this.classList.add('drag-over');
+  });
+  card.addEventListener('dragleave', function() {
+    this.classList.remove('drag-over');
+  });
+  card.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('drag-over');
+    if (!_dragCard || this === _dragCard) return;
+    const list = document.getElementById('questions-list');
+    const cards = [...list.children];
+    const fromIdx = cards.indexOf(_dragCard);
+    const toIdx   = cards.indexOf(this);
+    if (fromIdx < toIdx) list.insertBefore(_dragCard, this.nextSibling);
+    else                  list.insertBefore(_dragCard, this);
+    renumberQuestions();
   });
 }
 
@@ -906,16 +1161,33 @@ async function saveQuiz() {
 
   const questions = [];
   let valid = true;
+
+  // Clear previous validation
+  cards.forEach(c => c.classList.remove('invalid'));
+
   cards.forEach(card => {
     const text = card.querySelector('.q-text').value.trim();
-    const timeLimit = parseInt(card.querySelector('.q-time').value) || 20;
+    const timeLimit = parseInt(card.querySelector('.time-custom-input, .q-time-hidden')?.value) || 20;
     const options = [...card.querySelectorAll('.q-option')].map(i => i.value.trim());
     const correctIndex = parseInt(card.querySelector('.q-correct').value);
-    if (!text || options.some(o => !o)) { valid = false; return; }
+    if (!text || options.some(o => !o)) {
+      valid = false;
+      card.classList.add('invalid');
+      // Auto-expand collapsed invalid cards
+      if (card.classList.contains('collapsed')) {
+        card.classList.remove('collapsed');
+        card.querySelector('.q-collapse-btn').textContent = '▲';
+      }
+      return;
+    }
     questions.push({ text, options, correctIndex, timeLimit });
   });
 
-  if (!valid) { toast('Completá todos los campos de las preguntas', true); return; }
+  if (!valid) {
+    toast('Completá todos los campos marcados en rojo', true);
+    document.querySelector('.q-card.invalid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
 
   const url = editId ? `${API}/quizzes/${editId}` : `${API}/quizzes`;
   const method = editId ? 'PUT' : 'POST';
@@ -926,6 +1198,7 @@ async function saveQuiz() {
   document.getElementById('quiz-title').value = '';
   document.getElementById('questions-list').innerHTML = '';
   document.getElementById('form-title').textContent = 'Nuevo quiz';
+  _updateQCountLabel();
   showView('quizzes');
 }
 
@@ -1326,38 +1599,125 @@ function revealRankRow(idx, maxScore, score) {
 
 function toggleImport() {
   const box = document.getElementById('import-box');
-  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  const btn = document.getElementById('btn-import-toggle');
+  const open = box.style.display === 'none' || box.style.display === '';
+  box.style.display = open ? 'block' : 'none';
+  if (btn) btn.textContent = open ? '✕ Cerrar' : '⬆ Importar';
+}
+
+function switchImportTab(name, clickedTab) {
+  document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.import-panel').forEach(p => p.classList.remove('active'));
+  clickedTab.classList.add('active');
+  document.getElementById('import-panel-' + name).classList.add('active');
+}
+
+// ─── Text import ──────────────────────────────────────────────────────────────
+function _parseTextBlocks(raw) {
+  const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+  const parsed = [];
+  blocks.forEach(block => {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 3) return;
+    const text = lines[0];
+    const optionLines = lines.slice(1, 5);
+    if (optionLines.length < 2) return;
+    const options = optionLines.map(l => l.replace(/\*$/, ''));
+    const correctIndex = optionLines.findIndex(l => l.endsWith('*'));
+    parsed.push({ text, options: options.concat(Array(4 - options.length).fill('')), correctIndex: correctIndex >= 0 ? correctIndex : 0, timeLimit: 20 });
+  });
+  return parsed;
+}
+
+function updateImportCounter() {
+  const raw = document.getElementById('import-text').value;
+  const n = _parseTextBlocks(raw).length;
+  const el = document.getElementById('import-counter');
+  el.textContent = raw.trim() ? `${n} pregunta${n !== 1 ? 's' : ''} detectada${n !== 1 ? 's' : ''}` : '';
 }
 
 function importQuestions() {
   const raw = document.getElementById('import-text').value.trim();
   if (!raw) { toast('Pegá preguntas primero', true); return; }
+  const parsed = _parseTextBlocks(raw);
+  if (!parsed.length) { toast('No se encontraron preguntas válidas', true); return; }
+  parsed.forEach(q => addQuestion(q));
+  toast(`${parsed.length} pregunta${parsed.length > 1 ? 's' : ''} importada${parsed.length > 1 ? 's' : ''} ✓`);
+  document.getElementById('import-text').value = '';
+  document.getElementById('import-counter').textContent = '';
+  toggleImport();
+}
 
-  const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
-  let imported = 0;
-
-  blocks.forEach(block => {
-    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 3) return;
-
-    const text = lines[0];
-    const optionLines = lines.slice(1, 5);
-    if (optionLines.length < 2) return;
-
-    const options = optionLines.map(l => l.replace(/\*$/, ''));
-    const correctIndex = optionLines.findIndex(l => l.endsWith('*'));
-
-    addQuestion({ text, options: options.concat(Array(4 - options.length).fill('')), correctIndex: correctIndex >= 0 ? correctIndex : 0, timeLimit: 20 });
-    imported++;
-  });
-
-  if (imported > 0) {
-    toast(`${imported} pregunta${imported > 1 ? 's' : ''} importada${imported > 1 ? 's' : ''} ✓`);
-    document.getElementById('import-text').value = '';
-    toggleImport();
-  } else {
-    toast('No se encontraron preguntas válidas', true);
+// ─── CSV import ───────────────────────────────────────────────────────────────
+function _parseCSV(raw) {
+  const lines = raw.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  // Detect if first line is a header (contains "pregunta" or "question")
+  const firstLower = lines[0].toLowerCase();
+  const startIdx = (firstLower.includes('pregunta') || firstLower.includes('question') || firstLower.includes('opcion')) ? 1 : 0;
+  const parsed = [];
+  for (let i = startIdx; i < lines.length; i++) {
+    // Split by comma, but respect quoted fields
+    const cols = lines[i].match(/(".*?"|[^,]+)/g)?.map(c => c.replace(/^"|"$/g, '').trim()) || [];
+    if (cols.length < 6) continue;
+    const [text, a, b, c, d, correct] = cols;
+    if (!text) continue;
+    const correctMap = { 'a': 0, 'b': 1, 'c': 2, 'd': 3, '0': 0, '1': 1, '2': 2, '3': 3 };
+    const correctIndex = correctMap[correct?.toLowerCase()] ?? 0;
+    parsed.push({ text, options: [a, b, c, d], correctIndex, timeLimit: 20 });
   }
+  return parsed;
+}
+
+function updateCSVCounter() {
+  const raw = document.getElementById('import-csv').value;
+  const n = _parseCSV(raw).length;
+  const el = document.getElementById('csv-counter');
+  el.textContent = raw.trim() ? `${n} pregunta${n !== 1 ? 's' : ''} detectada${n !== 1 ? 's' : ''}` : '';
+}
+
+function loadCSVFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('import-csv').value = e.target.result;
+    updateCSVCounter();
+  };
+  reader.readAsText(file);
+}
+
+function importCSV() {
+  const raw = document.getElementById('import-csv').value.trim();
+  if (!raw) { toast('Pegá o subí un CSV primero', true); return; }
+  const parsed = _parseCSV(raw);
+  if (!parsed.length) { toast('No se encontraron filas válidas en el CSV', true); return; }
+  parsed.forEach(q => addQuestion(q));
+  toast(`${parsed.length} pregunta${parsed.length > 1 ? 's' : ''} importada${parsed.length > 1 ? 's' : ''} ✓`);
+  document.getElementById('import-csv').value = '';
+  document.getElementById('csv-counter').textContent = '';
+  toggleImport();
+}
+
+// ─── AI prompts ───────────────────────────────────────────────────────────────
+function copyPrompt(btn, promptId) {
+  const text = document.getElementById(promptId).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '¡Copiado! ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copiar prompt'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    // Fallback for browsers without clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '¡Copiado! ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copiar prompt'; btn.classList.remove('copied'); }, 2000);
+  });
 }
 
 // ─── Quiz stats ───────────────────────────────────────────────────────────────
