@@ -431,13 +431,24 @@ if (!_token) { window.location.replace('/login/'); throw new Error('unauthentica
 
 const _user = JSON.parse(localStorage.getItem('synapto_user') || '{}');
 // Show user name in sidebar if element exists
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const el = document.getElementById('user-name');
   if (el && _user.name) el.textContent = _user.name;
   const av = document.getElementById('user-avatar');
   if (av && _user.name) av.textContent = _user.name.charAt(0).toUpperCase();
-  if (_user.role === 'admin') document.getElementById('nav-users').style.display = 'flex';
   if (localStorage.getItem('sidebar-collapsed') === '1') document.getElementById('shell').classList.add('collapsed');
+
+  // Fetch fresh user data from server (role may have changed)
+  try {
+    const res = await authFetch(`${API}/auth/me`);
+    if (res.ok) {
+      const fresh = await res.json();
+      Object.assign(_user, fresh);
+      localStorage.setItem('synapto_user', JSON.stringify(_user));
+      if (fresh.name) { el.textContent = fresh.name; av.textContent = fresh.name.charAt(0).toUpperCase(); }
+      if (fresh.role === 'admin') document.getElementById('nav-users').style.display = 'flex';
+    }
+  } catch {}
 });
 
 function authFetch(url, opts = {}) {
