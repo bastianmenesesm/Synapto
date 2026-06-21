@@ -278,7 +278,7 @@ io.on('connection', (socket) => {
 
     const playerName = name.trim().substring(0, 20);
     const playerEmoji = (emoji && typeof emoji === 'string') ? emoji.trim().substring(0, 4) : '😎';
-    game.players[socket.id] = { name: playerName, emoji: playerEmoji, score: 0, answered: false };
+    game.players[socket.id] = { name: playerName, emoji: playerEmoji, score: 0, answered: false, streak: 0 };
     socket.join(`game:${code}`);
     socket.gameCode = code;
     socket.role = 'player';
@@ -357,7 +357,7 @@ io.on('connection', (socket) => {
     game.status = 'question';
     game.timeLeft = q.time_limit;
 
-    Object.values(game.players).forEach(p => { p.answered = false; p.lastAnswer = null; });
+    Object.values(game.players).forEach(p => { p.answered = false; p.lastAnswer = null; p._prevStreak = p.streak; });
 
     const questionPayload = {
       index: game.currentQuestion,
@@ -397,9 +397,12 @@ io.on('connection', (socket) => {
     if (correct) {
       const bonus = Math.round((game.timeLeft / q.time_limit) * 500);
       player.score += 500 + bonus;
+      player.streak = (player.streak || 0) + 1;
+    } else {
+      player.streak = 0;
     }
 
-    socket.emit('player:answer:result', { correct, correctIndex: q.correct_index, score: player.score });
+    socket.emit('player:answer:result', { correct, correctIndex: q.correct_index, score: player.score, streak: player.streak });
 
     const allAnswered = Object.values(game.players).every(p => p.answered);
     if (allAnswered) {
@@ -436,6 +439,8 @@ function revealAnswers(code, q) {
   game.status = 'results';
 
   const options = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+  // Reset streak for players who didn't answer
+  Object.values(game.players).forEach(p => { if (!p.answered) p.streak = 0; });
   const tally = options.map((_, i) =>
     Object.values(game.players).filter(p => p.lastAnswer === i).length
   );

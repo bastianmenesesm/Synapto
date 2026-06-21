@@ -150,6 +150,24 @@
     .t2 { background: #FF9800; }
     .t3 { background: #4CAF50; }
 
+    /* Podium */
+    .podium-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 780px; }
+    .podium-title { font-size: 28px; font-weight: 800; margin-bottom: 32px; text-align: center; animation: fadeSlideDown .5s ease both; }
+    .podium-stage { display: flex; align-items: flex-end; justify-content: center; gap: 12px; width: 100%; margin-bottom: 40px; }
+    .podium-col { display: flex; flex-direction: column; align-items: center; flex: 1; max-width: 200px; }
+    .podium-player { text-align: center; margin-bottom: 12px; animation: popIn .5s ease both; }
+    .podium-emoji { font-size: 44px; }
+    .podium-name { font-size: 16px; font-weight: 700; margin-top: 6px; }
+    .podium-score { font-size: 14px; color: var(--accent2); margin-top: 2px; }
+    .podium-bar { width: 100%; border-radius: 12px 12px 0 0; display: flex; align-items: center; justify-content: center; font-size: 40px; transform-origin: bottom; }
+    .pb1 { height: 170px; background: linear-gradient(180deg,#FFD700,#FFA500); animation: riseUp .7s .2s ease both; }
+    .pb2 { height: 120px; background: linear-gradient(180deg,#C0C0C0,#909090); animation: riseUp .7s .4s ease both; }
+    .pb3 { height: 85px;  background: linear-gradient(180deg,#CD7F32,#8B4513); animation: riseUp .7s .6s ease both; }
+    .podium-rest { width: 100%; max-width: 780px; display: flex; flex-direction: column; gap: 8px; }
+    @keyframes riseUp { from{transform:scaleY(0);opacity:0} to{transform:scaleY(1);opacity:1} }
+    .confetti-layer { position: fixed; inset: 0; pointer-events: none; z-index: 100; overflow: hidden; }
+    @keyframes confettiFall { to { transform: translateY(105vh) rotate(720deg); opacity:0; } }
+
     /* Floating reactions */
     .reaction-layer { position: fixed; inset: 0; pointer-events: none; z-index: 200; }
     .reaction-bubble {
@@ -216,14 +234,19 @@
 
   <!-- Final -->
   <div id="s-final" class="hidden" style="width:100%;display:flex;flex-direction:column;align-items:center">
-    <p class="rank-title">🏆 Resultados finales</p>
-    <div class="rank-list" id="final-ranking"></div>
+    <div class="podium-wrap">
+      <p class="podium-title">🏆 Resultados finales</p>
+      <div class="podium-stage" id="podium-stage"></div>
+      <div class="podium-rest" id="podium-rest"></div>
+    </div>
   </div>
 
 </div>
 
 <!-- Floating reaction layer -->
 <div class="reaction-layer" id="reaction-layer"></div>
+<!-- Confetti layer -->
+<div class="confetti-layer" id="confetti-layer"></div>
 
 <script>
 const API = SYNAPTO_CONFIG.backendUrl;
@@ -368,22 +391,60 @@ function renderReveal(correctIndex, tally, ranking, questionText, options) {
 }
 
 function renderFinal(ranking) {
+  // Build podium: order is 2nd, 1st, 3rd visually
+  const podiumOrder = [ranking[1], ranking[0], ranking[2]].filter(Boolean);
+  const podiumClasses = ['pb2','pb1','pb3'];
+  const podiumDelays = ['.5s','.2s','.8s'];
   const medals = ['🥇','🥈','🥉'];
-  const maxScore = ranking[0]?.score || 1;
-  document.getElementById('final-ranking').innerHTML = ranking.map((p, i) => `
-    <div class="rank-item" style="animation-delay:${i*0.12}s">
-      <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
-      <span style="font-size:22px">${p.emoji || ''}</span>
-      <div style="flex:1">
-        <div style="display:flex;justify-content:space-between">
-          <span class="rank-name">${p.name}</span>
-          <span class="rank-pts">${p.score.toLocaleString()}</span>
+
+  document.getElementById('podium-stage').innerHTML = podiumOrder.map((p, vi) => {
+    const realIdx = ranking.indexOf(p);
+    const barClass = podiumClasses[vi];
+    const delay = podiumDelays[vi];
+    return `
+      <div class="podium-col">
+        <div class="podium-player" style="animation-delay:${delay}">
+          <div class="podium-emoji">${p.emoji || '😎'}</div>
+          <div class="podium-name">${p.name}</div>
+          <div class="podium-score">${p.score.toLocaleString()} pts</div>
         </div>
-        <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
-      </div>
+        <div class="podium-bar ${barClass}">${medals[realIdx] || ''}</div>
+      </div>`;
+  }).join('');
+
+  // Rest of ranking (4th onwards)
+  const rest = ranking.slice(3);
+  document.getElementById('podium-rest').innerHTML = rest.map((p, i) => `
+    <div class="rank-item" style="animation-delay:${i*0.1}s">
+      <span class="rank-pos" style="font-size:18px;min-width:36px">#${i+4}</span>
+      <span style="font-size:20px">${p.emoji || ''}</span>
+      <span class="rank-name">${p.name}</span>
+      <span class="rank-pts">${p.score.toLocaleString()}</span>
     </div>
   `).join('');
+
   show('s-final');
+  spawnConfetti();
+}
+
+function spawnConfetti() {
+  const layer = document.getElementById('confetti-layer');
+  layer.innerHTML = '';
+  const colors = ['#7c5cfc','#4ecdc4','#E63946','#2196F3','#FF9800','#4CAF50','#FFD700','#fff'];
+  for (let i = 0; i < 80; i++) {
+    const el = document.createElement('div');
+    const size = 5 + Math.random() * 8;
+    el.style.cssText = `
+      position:absolute; width:${size}px; height:${size * 1.6}px;
+      background:${colors[Math.floor(Math.random() * colors.length)]};
+      left:${Math.random() * 100}%; top:-20px; border-radius:2px;
+      opacity:${0.7 + Math.random() * 0.3};
+      animation: confettiFall ${1.8 + Math.random() * 2}s ${Math.random() * 2}s ease-in forwards;
+      transform: rotate(${Math.random() * 360}deg);
+    `;
+    layer.appendChild(el);
+  }
+  setTimeout(() => layer.innerHTML = '', 5000);
 }
 
 function updatePlayers(players) {

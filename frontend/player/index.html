@@ -121,6 +121,24 @@
     .rank-me { background: rgba(124,92,252,.15); border-radius: 8px; padding: 10px; margin: -10px; }
 
     @keyframes pulse{0%,100%{opacity:.2}50%{opacity:1}}
+
+    /* Streak overlay */
+    .streak-overlay {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      pointer-events: none; z-index: 200;
+    }
+    .streak-badge {
+      background: linear-gradient(135deg, #FF9800, #E63946);
+      color: #fff; font-size: 28px; font-weight: 900; padding: 16px 32px;
+      border-radius: 20px; text-align: center; letter-spacing: -.5px;
+      box-shadow: 0 8px 32px rgba(230,57,70,.5);
+      animation: streakPop .5s cubic-bezier(.17,.67,.35,1.4) both;
+    }
+    @keyframes streakPop {
+      0%  { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+      70% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+      100%{ transform: scale(1) rotate(0); opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -258,6 +276,11 @@
 
 </div>
 
+<!-- Streak overlay -->
+<div id="streak-overlay" class="streak-overlay hidden">
+  <div class="streak-badge" id="streak-badge"></div>
+</div>
+
 <!-- Countdown overlay (outside .screen to cover full viewport) -->
 <div id="countdown-overlay" class="countdown-overlay hidden">
   <div class="countdown-num" id="countdown-num">3</div>
@@ -265,6 +288,39 @@
 
 <script>
 const API = SYNAPTO_CONFIG.backendUrl;
+
+// ── Sonidos del jugador (Web Audio API) ───────────────────────────────────────
+const PlayerSFX = {
+  ctx: null,
+  init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+  _note(freq, start, dur, type = 'sine', vol = 0.3) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain); gain.connect(this.ctx.destination);
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    osc.start(start); osc.stop(start + dur);
+  },
+  play(type) {
+    try {
+      this.init();
+      const t = this.ctx.currentTime;
+      if (type === 'correct') {
+        [[523,.0],[659,.08],[784,.16],[1047,.24]].forEach(([f,d]) => this._note(f, t+d, .18));
+      } else if (type === 'wrong') {
+        [[330,.0],[262,.12],[196,.24]].forEach(([f,d]) => this._note(f, t+d, .22, 'sawtooth', .25));
+      } else if (type === 'beep') {
+        this._note(880, t, .07, 'sine', .15);
+      } else if (type === 'fanfare') {
+        [[523,.0],[659,.08],[784,.16],[1047,.24],[1319,.36],[1047,.48],[1319,.56]].forEach(([f,d]) => this._note(f, t+d, .18));
+      } else if (type === 'finish') {
+        [[392,.0],[523,.1],[659,.2]].forEach(([f,d]) => this._note(f, t+d, .25, 'sine', .2));
+      }
+    } catch {}
+  }
+};
+
 let socket = null;
 let myName = '';
 let myEmoji = '😎';
@@ -274,6 +330,7 @@ let currentTimeLimit = 20;
 let timerInterval = null;
 let savedCode = '';
 let reactionSent = false;
+let myStreak = 0;
 
 const EMOJIS = ['😎','🤩','🐱','🐶','🦊','🐸','🦁','🐯','🐻','🐼','🦄','🐲','🤖','👻','⚡','🔥'];
 
@@ -303,6 +360,7 @@ function show(id) {
 }
 
 function joinGame() {
+  PlayerSFX.init(); // init AudioContext on user gesture
   const code = document.getElementById('inp-code').value.trim().toUpperCase();
   const name = document.getElementById('inp-name').value.trim();
   if (!code || !name) { showError('Completá el código y tu nombre'); return; }
@@ -382,6 +440,7 @@ function connectSocket(code, name) {
   socket.on('timer:tick', ({ timeLeft }) => {
     const pct = timeLeft / currentTimeLimit;
     const urgent = timeLeft <= 5;
+    if (urgent) PlayerSFX.play('beep');
     const color = urgent ? '#E63946' : 'var(--accent2)';
 
     const numEl = document.getElementById('q-timer');
@@ -397,9 +456,10 @@ function connectSocket(code, name) {
     fill.style.background = color;
   });
 
-  socket.on('player:answer:result', ({ correct, correctIndex, score }) => {
+  socket.on('player:answer:result', ({ correct, correctIndex, score, streak }) => {
     myScore = score;
     myCorrect = correct;
+    myStreak = streak || 0;
     clearInterval(timerInterval);
     document.querySelectorAll('.ans-btn').forEach((btn, i) => {
       btn.disabled = true;
@@ -410,16 +470,23 @@ function connectSocket(code, name) {
   });
 
   socket.on('question:reveal', ({ correctIndex, ranking }) => {
+    // Sound after reveal so players can't copy each other
+    PlayerSFX.play(myCorrect ? 'correct' : 'wrong');
+
     document.getElementById('r-icon').textContent = myCorrect ? '✅' : '❌';
     document.getElementById('r-msg').textContent = myCorrect ? '¡Correcto!' : 'Incorrecto';
     document.getElementById('r-pts').textContent = `Tu puntaje: ${myScore.toLocaleString()} pts`;
-    // Reset reactions
     document.querySelectorAll('.react-btn').forEach(b => b.classList.remove('sent'));
     reactionSent = false;
+
+    if (myStreak >= 2) showStreak(myStreak);
     showResult(ranking);
   });
 
   socket.on('game:finished', ({ ranking }) => {
+    const myPos = ranking.findIndex(p => p.name === myName);
+    PlayerSFX.play(myPos >= 0 && myPos < 3 ? 'fanfare' : 'finish');
+
     document.getElementById('final-score').textContent = myScore.toLocaleString();
     const medals = ['🥇','🥈','🥉'];
     document.getElementById('final-ranking').innerHTML = ranking.map((p, i) => `
@@ -494,6 +561,19 @@ function startTimer(seconds) {
     t--;
     if (t <= 0) clearInterval(timerInterval);
   }, 1000);
+}
+
+function showStreak(streak) {
+  const labels = { 2:'¡Racha x2! 🔥', 3:'¡Racha x3! 🔥🔥', 4:'¡Racha x4! ⚡🔥', 5:'¡Racha x5! 🚀🔥🔥' };
+  const text = labels[streak] || `¡Racha x${streak}! 🔥`;
+  const overlay = document.getElementById('streak-overlay');
+  const badge = document.getElementById('streak-badge');
+  badge.textContent = text;
+  badge.style.animation = 'none';
+  void badge.offsetWidth;
+  badge.style.animation = '';
+  overlay.classList.remove('hidden');
+  setTimeout(() => overlay.classList.add('hidden'), 2000);
 }
 
 function showError(msg) {
