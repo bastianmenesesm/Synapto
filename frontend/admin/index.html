@@ -120,6 +120,9 @@
 
     .question-panel { display: none; flex-direction: column; gap: 24px; position: relative; }
     .question-panel.active { display: flex; }
+    .admin-reaction-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9000; }
+    .admin-reaction-bubble { position: absolute; bottom: 10%; font-size: 40px; animation: adminFloatUp 2.5s ease-out forwards; }
+    @keyframes adminFloatUp { 0%{transform:translateY(0) scale(1);opacity:1} 100%{transform:translateY(-260px) scale(1.3);opacity:0} }
     .q-text-big { font-size: 28px; font-weight: 700; text-align: center; line-height: 1.3; padding: 28px 32px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
     .q-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .q-option-btn { padding: 20px 24px; border-radius: var(--radius); font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 14px; border: none; cursor: default; transition: transform .15s; }
@@ -710,6 +713,36 @@ Opción 4</div>
   </div>
 </div>
 
+<!-- Launch config modal -->
+<div id="modal-launch" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeLaunchModal()">
+  <div class="modal" style="max-width:440px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h2 id="launch-quiz-title" style="font-size:17px;font-weight:700"></h2>
+      <button onclick="closeLaunchModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:4px">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:20px;font-weight:500;text-transform:uppercase;letter-spacing:.4px">Configurar partida</p>
+
+    <div style="margin-bottom:20px">
+      <p style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">Modalidad</p>
+      <div style="display:flex;gap:8px">
+        <button id="mode-btn-individual" class="btn btn-primary btn-sm" style="flex:1" onclick="setLaunchMode('individual')">👤 Individual</button>
+        <button id="mode-btn-teams" class="btn btn-ghost btn-sm" style="flex:1" onclick="setLaunchMode('teams')">👥 Equipos</button>
+      </div>
+    </div>
+
+    <div id="teams-config" style="display:none;margin-bottom:20px">
+      <p style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px">Nombres de equipos</p>
+      <div id="teams-list"></div>
+      <button class="btn btn-ghost btn-sm" onclick="addTeamInput()" style="margin-top:6px;width:100%">+ Agregar equipo</button>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeLaunchModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmStartGame()">▶ Iniciar partida</button>
+    </div>
+  </div>
+</div>
+
 <!-- Preview modal -->
 <div id="modal-preview" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePreviewModal()">
   <div class="modal" style="max-width:620px;padding:0;overflow:hidden">
@@ -750,6 +783,8 @@ let gameState = 'lobby';
 let pendingRanking = null;
 let totalPlayers = 0;
 let answeredPlayers = 0;
+let currentQIdx = 0;
+let totalQs = 0;
 const OPT_LABELS = ['A','B','C','D'];
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
@@ -892,12 +927,12 @@ async function loadUsers() {
               <td style="padding:12px 14px;font-weight:600">
                 <div style="display:flex;align-items:center;gap:10px">
                   <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">
-                    ${u.name.charAt(0).toUpperCase()}
+                    ${_esc(u.name.charAt(0).toUpperCase())}
                   </div>
-                  ${u.name} ${u.id === _user.id ? '<span style="font-size:11px;color:var(--accent2);margin-left:4px">(tú)</span>' : ''}
+                  ${_esc(u.name)} ${u.id === _user.id ? '<span style="font-size:11px;color:var(--accent2);margin-left:4px">(tú)</span>' : ''}
                 </div>
               </td>
-              <td style="padding:12px 14px;color:var(--muted)">${u.email}</td>
+              <td style="padding:12px 14px;color:var(--muted)">${_esc(u.email)}</td>
               <td style="padding:12px 14px;text-align:center">${u.quiz_count}</td>
               <td style="padding:12px 14px;color:var(--muted)">${new Date(u.created_at).toLocaleDateString('es-CL')}</td>
               <td style="padding:12px 14px">
@@ -991,16 +1026,16 @@ async function loadQuizzes() {
   grid.innerHTML = quizzes.map(q => {
     const qCount = q.question_count != null ? q.question_count : '?';
     const fecha = new Date(q.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
-    const safeTitle = q.title.replace(/'/g, "\\'");
+    const safeTitle = _esc(q.title);
     return `
     <div class="quiz-card">
-      <h3>${q.title}</h3>
+      <h3>${safeTitle}</h3>
       <div class="meta">
         <span class="quiz-badge">❓ ${qCount} ${qCount !== 1 ? 'preguntas' : 'pregunta'}</span>
         <span class="quiz-badge">📅 ${fecha}</span>
       </div>
       <div class="quiz-actions">
-        <button class="btn btn-primary btn-sm" onclick="startGame('${q.id}','${safeTitle}')">▶ Jugar</button>
+        <button class="btn btn-primary btn-sm" onclick="openLaunchModal('${q.id}','${safeTitle}')">▶ Jugar</button>
         <button class="btn btn-ghost btn-sm" onclick="showQuizPreview('${q.id}','${safeTitle}')">👁 Previa</button>
         <button class="btn btn-ghost btn-sm" onclick="showQuizStats('${q.id}','${safeTitle}')">📊 Stats</button>
         <button class="btn btn-ghost btn-sm" onclick="editQuiz('${q.id}')">✏️</button>
@@ -1021,13 +1056,18 @@ async function duplicateQuiz(id) {
     correctIndex: q.correct_index,
     timeLimit: q.time_limit
   }));
-  await authFetch(`${API}/quizzes`, {
+  const dupRes = await authFetch(`${API}/quizzes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title: newTitle, questions })
   });
+  if (!dupRes.ok) { toast('Error al duplicar el quiz', true); return; }
   toast('Quiz duplicado ✓');
   loadQuizzes();
+}
+
+function _esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 const OPT_LABEL_LETTERS = ['A','B','C','D'];
@@ -1316,7 +1356,12 @@ async function saveQuiz() {
 
   const url = editId ? `${API}/quizzes/${editId}` : `${API}/quizzes`;
   const method = editId ? 'PUT' : 'POST';
-  await authFetch(url, { method, body: JSON.stringify({ title, questions }) });
+  const saveRes = await authFetch(url, { method, body: JSON.stringify({ title, questions }) });
+  if (!saveRes.ok) {
+    const err = await saveRes.json().catch(() => ({}));
+    toast(err.error || 'Error al guardar el quiz', true);
+    return;
+  }
 
   toast(editId ? 'Quiz actualizado ✓' : 'Quiz creado ✓');
   document.getElementById('edit-id').value = '';
@@ -1340,16 +1385,79 @@ async function editQuiz(id) {
 
 async function deleteQuiz(id) {
   if (!confirm('¿Eliminar este quiz?')) return;
-  await authFetch(`${API}/quizzes/${id}`, { method: 'DELETE' });
+  const delRes = await authFetch(`${API}/quizzes/${id}`, { method: 'DELETE' });
+  if (!delRes.ok) { toast('Error al eliminar el quiz', true); return; }
   toast('Quiz eliminado');
   loadQuizzes();
 }
 
-async function startGame(quizId, title) {
+const TEAM_COLORS_UI = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c'];
+let _launchQuizId = null, _launchTitle = '', _launchMode = 'individual';
+
+function openLaunchModal(quizId, title) {
+  _launchQuizId = quizId;
+  _launchTitle = title;
+  _launchMode = 'individual';
+  document.getElementById('launch-quiz-title').textContent = title;
+  document.getElementById('mode-btn-individual').className = 'btn btn-primary btn-sm';
+  document.getElementById('mode-btn-teams').className = 'btn btn-ghost btn-sm';
+  document.getElementById('mode-btn-individual').style.flex = '1';
+  document.getElementById('mode-btn-teams').style.flex = '1';
+  document.getElementById('teams-config').style.display = 'none';
+  document.getElementById('teams-list').innerHTML = '';
+  ['Rojo', 'Azul', 'Verde'].forEach(n => addTeamInput(n));
+  document.getElementById('modal-launch').style.display = 'flex';
+}
+
+function closeLaunchModal() { document.getElementById('modal-launch').style.display = 'none'; }
+
+function setLaunchMode(mode) {
+  _launchMode = mode;
+  document.getElementById('mode-btn-individual').className = `btn ${mode === 'individual' ? 'btn-primary' : 'btn-ghost'} btn-sm`;
+  document.getElementById('mode-btn-individual').style.flex = '1';
+  document.getElementById('mode-btn-teams').className = `btn ${mode === 'teams' ? 'btn-primary' : 'btn-ghost'} btn-sm`;
+  document.getElementById('mode-btn-teams').style.flex = '1';
+  document.getElementById('teams-config').style.display = mode === 'teams' ? 'block' : 'none';
+}
+
+function addTeamInput(defaultName = '') {
+  const list = document.getElementById('teams-list');
+  if (list.children.length >= 6) return;
+  const i = list.children.length;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px';
+  div.innerHTML = `
+    <div style="width:12px;height:12px;border-radius:50%;background:${TEAM_COLORS_UI[i]};flex-shrink:0"></div>
+    <input type="text" class="inp" placeholder="Nombre del equipo" value="${_esc(defaultName)}" maxlength="20" style="flex:1;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"/>
+    ${i >= 2 ? `<button type="button" onclick="this.parentElement.remove();_syncTeamDots()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1">×</button>` : ''}
+  `;
+  list.appendChild(div);
+}
+
+function _syncTeamDots() {
+  [...document.getElementById('teams-list').children].forEach((div, i) => {
+    const dot = div.querySelector('div');
+    if (dot) dot.style.background = TEAM_COLORS_UI[i] || '#999';
+  });
+}
+
+async function confirmStartGame() {
+  let teamMode = false, teams = [];
+  if (_launchMode === 'teams') {
+    const inputs = [...document.querySelectorAll('#teams-list input')];
+    teams = inputs.map(i => i.value.trim()).filter(Boolean);
+    if (teams.length < 2) { toast('Definí al menos 2 equipos', true); return; }
+    teamMode = true;
+  }
+  closeLaunchModal();
+  await startGame(_launchQuizId, _launchTitle, { teamMode, teams });
+}
+
+async function startGame(quizId, title, opts = {}) {
   const baseUrl = window.location.origin;
   const res = await authFetch(`${API}/games`, {
     method: 'POST',
-    body: JSON.stringify({ quizId, baseUrl })
+    body: JSON.stringify({ quizId, baseUrl, ...opts })
   });
   const game = await res.json();
   currentGame = game;
@@ -1439,6 +1547,8 @@ function showCountdown(onDone) {
 function enterQuestionState(text, options, index, total, timeLimit) {
   gameState = 'question';
   answeredPlayers = 0;
+  currentQIdx = index;
+  totalQs = total;
 
   document.getElementById('game-lobby-section').style.display = 'none';
   document.getElementById('game-question-section').classList.add('active');
@@ -1517,6 +1627,11 @@ function enterRankingState() {
   document.getElementById('correct-banner').style.display = 'none';
 
   if (pendingRanking) showRanking(pendingRanking);
+
+  const isLastQ = totalQs > 0 && currentQIdx >= totalQs - 1;
+  const nextBtn = document.getElementById('btn-siguiente-pregunta');
+  if (nextBtn) nextBtn.textContent = isLastQ ? '🏆 Ver resultados' : 'Siguiente pregunta →';
+
   setButtons(false, true, false);
 }
 
@@ -1530,27 +1645,50 @@ function closeGame() {
 function connectSocket(code) {
   if (socket) socket.disconnect();
   socket = io(API.replace('/api', ''));
-  socket.emit('admin:join', { code });
+  socket.emit('admin:join', { code, token: _token });
 
-  socket.on('lobby:update', ({ players }) => {
+  socket.on('lobby:update', ({ players, teamMode, teams }) => {
     if (players.length > totalPlayers) sound.sfx('player-in');
     totalPlayers = players.length;
     document.getElementById('player-count').textContent = players.length;
-    document.getElementById('player-lobby').innerHTML = players.map(p =>
-      `<div class="player-chip">${p.emoji || ''} ${p.name}</div>`
-    ).join('');
+
+    if (teamMode && teams && teams.length) {
+      const byTeam = {};
+      teams.forEach(t => { byTeam[t.id] = { ...t, members: [] }; });
+      players.forEach(p => { if (p.teamId && byTeam[p.teamId]) byTeam[p.teamId].members.push(p); });
+      document.getElementById('player-lobby').innerHTML = teams.map(t => `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
+            <span style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">${_esc(t.name)}</span>
+            <span style="font-size:12px;color:var(--muted)">(${byTeam[t.id]?.members.length || 0})</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${(byTeam[t.id]?.members || []).map(p => `<div class="player-chip" style="border-left:3px solid ${t.color}">${_esc(p.emoji || '')} ${_esc(p.name)}</div>`).join('') || '<span style="font-size:12px;color:var(--muted);padding:2px 6px">Sin jugadores</span>'}
+          </div>
+        </div>
+      `).join('');
+    } else {
+      document.getElementById('player-lobby').innerHTML = players.map(p =>
+        `<div class="player-chip">${_esc(p.emoji || '')} ${_esc(p.name)}</div>`
+      ).join('');
+    }
   });
 
-  socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
+  socket.on('question:countdown', ({ seconds, index, total }) => {
     setBadge('live');
     pendingRanking = null;
     sound.stopMusic(0.4);
     document.getElementById('game-lobby-section').style.display = 'none';
     document.getElementById('game-question-section').classList.add('active');
-    showCountdown(() => {
-      sound.playMusic('question');
-      enterQuestionState(text, options, index, total, timeLimit);
-    });
+    showCountdown(() => {}); // visual only — question:start fires from server
+  });
+
+  socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
+    const overlay = document.getElementById('countdown-overlay');
+    if (overlay) overlay.remove();
+    sound.playMusic('question');
+    enterQuestionState(text, options, index, total, timeLimit);
   });
 
   socket.on('admin:state', ({ status, players, currentQuestion }) => {
@@ -1582,6 +1720,8 @@ function connectSocket(code) {
     setTimeout(() => sound.playMusic('victory', false), 800);
     showFinalRanking(ranking);
   });
+
+  socket.on('reaction:new', ({ emoji, playerName }) => spawnAdminReaction(emoji, playerName));
 
   socket.on('timer:tick', ({ timeLeft }) => {
     if (gameState !== 'question') return;
@@ -2337,6 +2477,19 @@ function toggleMute() {
   document.getElementById('mute-btn').textContent = sound._muted ? '🔇' : '🔊';
   document.getElementById('vol-slider').value = sound._muted ? 0 : sound._volume;
 }
+
+function spawnAdminReaction(emoji, playerName) {
+  const layer = document.getElementById('admin-reaction-layer');
+  if (!layer) return;
+  const el = document.createElement('div');
+  el.className = 'admin-reaction-bubble';
+  el.textContent = emoji;
+  el.style.left = (8 + Math.random() * 84) + '%';
+  if (playerName) el.title = playerName;
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
 </script>
+<div id="admin-reaction-layer" class="admin-reaction-layer"></div>
 </body>
 </html>

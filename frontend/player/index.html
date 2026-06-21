@@ -122,6 +122,25 @@
 
     @keyframes pulse{0%,100%{opacity:.2}50%{opacity:1}}
 
+    /* Live wait screen */
+    .wait-card { padding: 20px; }
+    .wait-result-top { text-align: center; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .wait-result-icon-big { font-size: 48px; line-height: 1; margin-bottom: 6px; }
+    .wait-score-line { font-size: 28px; font-weight: 800; color: var(--accent2); }
+    .wait-progress-wrap { margin-bottom: 14px; }
+    .wait-progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .wait-progress-bar { width: 100%; height: 7px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+    .wait-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 99px; transition: width .5s cubic-bezier(.4,0,.2,1); }
+    .wait-ranking-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 7px; }
+    .live-rank-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px; font-size: 14px; transition: background .25s; }
+    .live-rank-item.me { background: rgba(124,92,252,.18); border: 1px solid rgba(124,92,252,.35); }
+    .live-rank-pos { font-size: 15px; min-width: 26px; text-align: center; }
+    .live-rank-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .live-rank-score { font-weight: 700; color: var(--accent2); font-size: 13px; white-space: nowrap; }
+    .live-rank-me-tag { font-size: 9px; background: var(--accent); color: #fff; padding: 2px 5px; border-radius: 99px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; flex-shrink: 0; }
+    .wait-sep { text-align: center; font-size: 11px; color: var(--muted); margin: 2px 0; letter-spacing: 2px; }
+    .wait-react-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 7px; margin-top: 14px; }
+
     /* Streak overlay */
     .streak-overlay {
       position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -167,6 +186,16 @@
     </div>
   </div>
 
+  <!-- TEAM SELECTION screen -->
+  <div id="s-team" class="hidden">
+    <div class="logo"><h1>Synapto</h1></div>
+    <div class="card" style="text-align:center">
+      <p style="font-size:18px;font-weight:700;margin-bottom:4px">¡Elegí tu equipo!</p>
+      <p id="team-player-name" style="font-size:14px;color:var(--muted);margin-bottom:20px"></p>
+      <div id="team-buttons" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+
   <!-- LOBBY screen -->
   <div id="s-lobby" class="hidden">
     <div class="logo"><h1>Synapto</h1></div>
@@ -202,12 +231,47 @@
     <div class="answers" id="answers"></div>
   </div>
 
-  <!-- WAITING after answer -->
+  <!-- WAITING after answer — interactive -->
   <div id="s-wait" class="hidden">
-    <div class="card" style="text-align:center;padding:32px">
-      <div class="wait-icon">⏳</div>
-      <p style="font-size:16px;font-weight:600;margin-bottom:8px">Respuesta enviada</p>
-      <p class="wait-text">Esperando que todos respondan…</p>
+    <div class="card wait-card">
+
+      <!-- Result + score -->
+      <div class="wait-result-top">
+        <div class="wait-result-icon-big" id="wait-result-icon">⏳</div>
+        <p id="wait-result-msg" style="font-size:17px;font-weight:700;margin-bottom:6px"></p>
+        <div id="wait-score-display" style="display:none">
+          <span class="wait-score-line" id="wait-score">0</span>
+          <span style="font-size:12px;color:var(--muted);margin-left:5px" id="wait-score-label">pts</span>
+        </div>
+        <div id="wait-streak-display" style="display:none;font-size:13px;font-weight:700;color:#ff9f43;margin-top:5px"></div>
+        <div id="wait-rank-display" style="display:none;font-size:13px;color:var(--muted);margin-top:4px"></div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="wait-progress-wrap">
+        <div class="wait-progress-label">
+          <span>Esperando respuestas…</span>
+          <span id="wait-answered-count">—</span>
+        </div>
+        <div class="wait-progress-bar">
+          <div class="wait-progress-fill" id="wait-progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Live ranking -->
+      <p class="wait-ranking-title">🏆 Ranking en vivo</p>
+      <div id="wait-live-ranking"></div>
+      <div id="wait-rank-self"></div>
+
+      <!-- Reactions -->
+      <p class="wait-react-title">Reaccioná</p>
+      <div class="reactions">
+        <button class="react-btn" onclick="sendReaction('🎉')">🎉</button>
+        <button class="react-btn" onclick="sendReaction('🤯')">🤯</button>
+        <button class="react-btn" onclick="sendReaction('😎')">😎</button>
+        <button class="react-btn" onclick="sendReaction('💀')">💀</button>
+      </div>
+
     </div>
   </div>
 
@@ -321,6 +385,10 @@ const PlayerSFX = {
   }
 };
 
+function _esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 let socket = null;
 let myName = '';
 let myEmoji = '😎';
@@ -352,8 +420,21 @@ EMOJIS.forEach(em => {
 const urlCode = new URLSearchParams(window.location.search).get('code');
 if (urlCode) document.getElementById('inp-code').value = urlCode.toUpperCase();
 
+// Restore last name/emoji from localStorage
+try {
+  const savedName = localStorage.getItem('synapto_player_name');
+  const savedEmoji = localStorage.getItem('synapto_player_emoji');
+  if (savedName) document.getElementById('inp-name').value = savedName;
+  if (savedEmoji) {
+    myEmoji = savedEmoji;
+    document.querySelectorAll('.emoji-opt').forEach(b => {
+      b.classList.toggle('selected', b.textContent === savedEmoji);
+    });
+  }
+} catch {}
+
 function show(id) {
-  ['s-join','s-lobby','s-question','s-wait','s-result','s-final','s-started','s-disconnected'].forEach(s =>
+  ['s-join','s-team','s-lobby','s-question','s-wait','s-result','s-final','s-started','s-disconnected'].forEach(s =>
     document.getElementById(s).classList.add('hidden')
   );
   document.getElementById(id).classList.remove('hidden');
@@ -367,6 +448,7 @@ function joinGame() {
 
   savedCode = code;
   myName = name;
+  try { localStorage.setItem('synapto_player_name', name); localStorage.setItem('synapto_player_emoji', myEmoji); } catch {}
   connectSocket(code, name);
 }
 
@@ -386,10 +468,39 @@ function connectSocket(code, name) {
     if (active.some(id => !document.getElementById(id).classList.contains('hidden'))) show('s-disconnected');
   });
 
-  socket.on('player:joined', ({ name }) => {
+  socket.on('player:joined', ({ name, teamMode, teams }) => {
     document.getElementById('lobby-avatar').textContent = myEmoji;
     document.getElementById('lobby-name').textContent = `Jugás como: ${name}`;
-    show('s-lobby');
+
+    if (teamMode && teams && teams.length) {
+      document.getElementById('team-player-name').textContent = `Jugás como: ${name}`;
+      document.getElementById('team-buttons').innerHTML = teams.map(t => `
+        <button onclick="joinTeam('${t.id}')" style="
+          display:flex;align-items:center;gap:12px;padding:14px 18px;
+          background:var(--surface2);border:2px solid ${t.color};border-radius:12px;
+          color:var(--text);font-size:16px;font-weight:700;cursor:pointer;
+          transition:background .15s,transform .1s;width:100%;text-align:left">
+          <div style="width:16px;height:16px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
+          ${t.name}
+        </button>
+      `).join('');
+      show('s-team');
+    } else {
+      show('s-lobby');
+    }
+  });
+
+  socket.on('team:update', ({ teams }) => {
+    // Update team button counts if still on team selection screen
+    if (!document.getElementById('s-team').classList.contains('hidden') && teams) {
+      teams.forEach(t => {
+        const btn = document.querySelector(`#team-buttons button[onclick*="${t.id}"]`);
+        if (btn) {
+          const countEl = btn.querySelector('.team-count');
+          if (countEl) countEl.textContent = `${t.count} jugador${t.count !== 1 ? 'es' : ''}`;
+        }
+      });
+    }
   });
 
   socket.on('error', (msg) => {
@@ -405,12 +516,31 @@ function connectSocket(code, name) {
     showError(msg); if (socket) socket.disconnect();
   });
 
-  socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
-    currentTimeLimit = timeLimit;
+  socket.on('question:countdown', ({ seconds, index, total }) => {
     myCorrect = false;
     reactionSent = false;
+    // Reset wait screen for new question
+    document.getElementById('wait-result-icon').textContent = '⏳';
+    document.getElementById('wait-result-msg').textContent = '';
+    document.getElementById('wait-score-display').style.display = 'none';
+    document.getElementById('wait-streak-display').style.display = 'none';
+    document.getElementById('wait-rank-display').style.display = 'none';
+    document.getElementById('wait-live-ranking').innerHTML = '';
+    document.getElementById('wait-rank-self').innerHTML = '';
+    document.getElementById('wait-rank-self').style.display = 'none';
+    document.getElementById('wait-progress-fill').style.width = '0%';
+    document.getElementById('wait-answered-count').textContent = '—';
+    document.querySelectorAll('.react-btn').forEach(b => { b.classList.remove('sent'); b.disabled = false; });
+    showCountdown(() => {});
+  });
 
-    // Prepare question content but keep buttons disabled until countdown ends
+  socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
+    currentTimeLimit = timeLimit;
+
+    // Dismiss any countdown overlay
+    const overlay = document.getElementById('countdown-overlay');
+    if (overlay) overlay.remove();
+
     document.getElementById('q-counter').textContent = `P ${index + 1}/${total}`;
     document.getElementById('q-text').textContent = text;
     document.getElementById('q-timer').textContent = timeLimit;
@@ -423,18 +553,14 @@ function connectSocket(code, name) {
     const letters = ['A','B','C','D'];
     const colors = ['a0','a1','a2','a3'];
     document.getElementById('answers').innerHTML = options.map((opt, i) => `
-      <button class="ans-btn ${colors[i]}" onclick="sendAnswer(${i})" disabled>
+      <button class="ans-btn ${colors[i]}" onclick="sendAnswer(${i})">
         <span class="ans-letter">${letters[i]}</span>
         <span>${opt}</span>
       </button>
     `).join('');
 
     show('s-question');
-    showCountdown(() => {
-      // Enable buttons and start timer after countdown
-      document.querySelectorAll('.ans-btn').forEach(b => b.disabled = false);
-      startTimer(timeLimit);
-    });
+    startTimer(timeLimit);
   });
 
   socket.on('timer:tick', ({ timeLeft }) => {
@@ -456,7 +582,7 @@ function connectSocket(code, name) {
     fill.style.background = color;
   });
 
-  socket.on('player:answer:result', ({ correct, correctIndex, score, streak }) => {
+  socket.on('player:answer:result', ({ correct, correctIndex, score, streak, rank, totalPlayers }) => {
     myScore = score;
     myCorrect = correct;
     myStreak = streak || 0;
@@ -466,7 +592,80 @@ function connectSocket(code, name) {
       if (i === correctIndex) btn.classList.add('correct');
       else btn.classList.add('wrong');
     });
+
+    // Populate wait screen
+    document.getElementById('wait-result-icon').textContent = correct ? '✅' : '❌';
+    document.getElementById('wait-result-msg').textContent = correct ? '¡Correcto!' : 'Incorrecto';
+    const displayScore = (teamMode && teamScore != null) ? teamScore : score;
+    document.getElementById('wait-score').textContent = displayScore.toLocaleString('es');
+    document.getElementById('wait-score-display').style.display = 'block';
+    const scoreLabel = document.querySelector('#wait-score-display div');
+    if (scoreLabel) scoreLabel.textContent = teamMode ? 'puntos del equipo' : 'puntos totales';
+
+    const streakEl = document.getElementById('wait-streak-display');
+    if (streak >= 2) {
+      streakEl.textContent = `🔥 ¡Racha de ${streak}!`;
+      streakEl.style.display = 'block';
+    } else {
+      streakEl.style.display = 'none';
+    }
+
+    const rankEl = document.getElementById('wait-rank-display');
+    if (rank && totalPlayers) {
+      const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🏅';
+      const label = teamMode ? 'equipo' : 'jugador';
+      rankEl.textContent = `${medal} ${rank}° ${label} de ${totalPlayers}`;
+      rankEl.style.display = 'block';
+    } else {
+      rankEl.style.display = 'none';
+    }
+
     setTimeout(() => show('s-wait'), 800);
+  });
+
+  socket.on('answer:progress', ({ answered, total, ranking, teamMode }) => {
+    document.getElementById('wait-answered-count').textContent = `${answered}/${total}`;
+    const pct = total > 0 ? (answered / total) * 100 : 0;
+    document.getElementById('wait-progress-fill').style.width = pct + '%';
+
+    if (!ranking || !ranking.length) return;
+    const medals = ['🥇','🥈','🥉','4°','5°','6°'];
+
+    // Find own position in ranking
+    const myIdx = ranking.findIndex(p => p.name === myName);
+    const showTop = myIdx >= 0 && myIdx < 5 ? 5 : 4;
+    const topSlice = ranking.slice(0, showTop);
+
+    document.getElementById('wait-live-ranking').innerHTML = topSlice.map((p, i) => {
+      const isMe = p.name === myName;
+      const avatar = teamMode
+        ? `<div style="width:10px;height:10px;border-radius:50%;background:${p.color || '#999'};flex-shrink:0"></div>`
+        : `<span style="font-size:15px">${p.emoji || ''}</span>`;
+      return `<div class="live-rank-item${isMe ? ' me' : ''}">
+        <span class="live-rank-pos">${medals[i] || '#'+(i+1)}</span>
+        ${avatar}
+        <span class="live-rank-name">${_esc(p.name)}</span>
+        ${isMe ? '<span class="live-rank-me-tag">TÚ</span>' : ''}
+        <span class="live-rank-score">${p.score.toLocaleString('es')}</span>
+      </div>`;
+    }).join('');
+
+    // Show self below fold if outside top slice
+    const selfEl = document.getElementById('wait-rank-self');
+    if (myIdx >= showTop) {
+      const me = ranking[myIdx];
+      selfEl.style.display = 'block';
+      selfEl.innerHTML = `<div class="wait-sep">· · ·</div>
+        <div class="live-rank-item me">
+          <span class="live-rank-pos">${medals[myIdx] || '#'+(myIdx+1)}</span>
+          <span style="font-size:15px">${me.emoji || ''}</span>
+          <span class="live-rank-name">${_esc(me.name)}</span>
+          <span class="live-rank-me-tag">TÚ</span>
+          <span class="live-rank-score">${me.score.toLocaleString('es')}</span>
+        </div>`;
+    } else {
+      selfEl.style.display = 'none';
+    }
   });
 
   socket.on('question:reveal', ({ correctIndex, ranking }) => {
@@ -523,6 +722,12 @@ function showCountdown(onDone) {
     numEl.style.animation = '';
     numEl.textContent = steps[i];
   }, 800);
+}
+
+function joinTeam(teamId) {
+  if (!socket) return;
+  socket.emit('player:team', { teamId });
+  show('s-lobby');
 }
 
 function sendAnswer(idx) {
