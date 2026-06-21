@@ -277,6 +277,19 @@
     .import-panel { display: none; }
     .import-panel.active { display: block; }
     .import-counter { font-size: 12px; color: var(--accent2); font-weight: 600; min-height: 16px; margin-top: 6px; }
+    /* Import preview */
+    .import-preview { background: var(--bg); border: 1.5px solid var(--accent2); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+    .import-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .import-preview-count { font-size: 13px; font-weight: 700; color: var(--accent2); }
+    .import-preview-warn { font-size: 12px; color: var(--danger); font-weight: 600; }
+    .import-preview-list { display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: auto; }
+    .import-preview-row { display: flex; align-items: baseline; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 13px; }
+    .import-preview-row.warn { border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.06); }
+    .ipq-num { font-size: 11px; color: var(--muted); font-weight: 700; flex-shrink: 0; width: 22px; }
+    .ipq-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .ipq-correct { font-size: 12px; color: var(--success); font-weight: 600; flex-shrink: 0; }
+    .ipq-nowarn { font-size: 12px; color: var(--danger); flex-shrink: 0; }
+    .import-preview-actions { display: flex; gap: 8px; margin-top: 10px; }
 
     /* AI prompt cards */
     .ai-prompt-card { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
@@ -445,8 +458,20 @@ Berlín
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
                   <div class="import-counter" id="import-counter"></div>
                   <div style="display:flex;gap:8px">
-                    <button class="btn btn-primary btn-sm" onclick="importQuestions()">Importar</button>
+                    <button class="btn btn-primary btn-sm" id="btn-preview-text" onclick="previewImport()" style="display:none">👁 Previsualizar</button>
                     <button class="btn btn-ghost btn-sm" onclick="toggleImport()">Cancelar</button>
+                  </div>
+                </div>
+                <!-- Inline preview -->
+                <div id="import-preview-box" class="import-preview" style="display:none">
+                  <div class="import-preview-header">
+                    <span class="import-preview-count" id="import-preview-count"></span>
+                    <span class="import-preview-warn" id="import-preview-warn"></span>
+                  </div>
+                  <div class="import-preview-list" id="import-preview-list"></div>
+                  <div class="import-preview-actions">
+                    <button class="btn btn-primary btn-sm" onclick="confirmImport()">✓ Confirmar e importar</button>
+                    <button class="btn btn-ghost btn-sm" onclick="clearImportPreview()">← Editar</button>
                   </div>
                 </div>
               </div>
@@ -1612,41 +1637,157 @@ function switchImportTab(name, clickedTab) {
   document.getElementById('import-panel-' + name).classList.add('active');
 }
 
-// ─── Text import ──────────────────────────────────────────────────────────────
-function _parseTextBlocks(raw) {
-  const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
-  const parsed = [];
-  blocks.forEach(block => {
-    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 3) return;
-    const text = lines[0];
-    const optionLines = lines.slice(1, 5);
-    if (optionLines.length < 2) return;
-    const options = optionLines.map(l => l.replace(/\*$/, ''));
-    const correctIndex = optionLines.findIndex(l => l.endsWith('*'));
-    parsed.push({ text, options: options.concat(Array(4 - options.length).fill('')), correctIndex: correctIndex >= 0 ? correctIndex : 0, timeLimit: 20 });
+// ─── Smart parser ─────────────────────────────────────────────────────────────
+function _parseSmartText(raw) {
+  if (!raw.trim()) return [];
+
+  // 1. Normalize line endings + strip markdown
+  raw = raw
+    .replace(/\r\n/g, '\n')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **bold**
+    .replace(/^\s*#{1,6}\s*/gm, '')        // ## headings
+    .replace(/^\s*[-–—•]\s+/gm, '');      // bullet points
+
+  const allLines = raw.split('\n');
+
+  // 2. Skip preamble: find first line that looks like a question
+  let start = 0;
+  for (let i = 0; i < allLines.length; i++) {
+    const s = _stripNumLabel(allLines[i].trim());
+    if (_isQuestion(s)) { start = i; break; }
+  }
+
+  // 3. Parse question+options groups
+  const questions = [];
+  let cur = null;
+
+  for (let i = start; i < allLines.length; i++) {
+    const raw_line = allLines[i].trim();
+
+    if (!raw_line) {
+      // blank line → close current question
+      if (cur && cur.optLines.length >= 2) { questions.push(cur); cur = null; }
+      continue;
+    }
+
+    const stripped = _stripNumLabel(raw_line);
+
+    if (_isQuestion(stripped)) {
+      // Save previous question if complete
+      if (cur && cur.optLines.length >= 2) questions.push(cur);
+      cur = { text: stripped, optLines: [] };
+    } else if (cur && cur.optLines.length < 4) {
+      // Strip option labels (A), a., 1., etc.)
+      const optLine = raw_line.replace(/^[A-Da-d][\.\)\-]\s*/, '').replace(/^\d+[\.\)\-]\s*/, '');
+      cur.optLines.push(optLine);
+    }
+  }
+  if (cur && cur.optLines.length >= 2) questions.push(cur);
+
+  // 4. Build final objects
+  return questions.map(q => {
+    const options = q.optLines.map(l => l.replace(/\s*\*\s*$/, '').trim());
+    const correctIndex = q.optLines.findIndex(l => l.trimEnd().endsWith('*'));
+    return {
+      text: q.text,
+      options: options.concat(Array(Math.max(0, 4 - options.length)).fill('')),
+      correctIndex: correctIndex >= 0 ? correctIndex : -1, // -1 = unmarked
+      timeLimit: 20,
+    };
   });
-  return parsed;
 }
+
+function _isQuestion(line) {
+  return line.includes('¿') || line.endsWith('?') || (/\?/.test(line) && line.length > 8);
+}
+
+function _stripNumLabel(line) {
+  return line
+    .replace(/^\d+[\.\)\-]\s*/, '')
+    .replace(/^Pregunta\s*\d+[:\.\)]\s*/i, '')
+    .replace(/^Q\s*\d+[:\.\)]\s*/i, '')
+    .trim();
+}
+
+// ─── Text import ──────────────────────────────────────────────────────────────
+let _pendingImport = null;
 
 function updateImportCounter() {
   const raw = document.getElementById('import-text').value;
-  const n = _parseTextBlocks(raw).length;
+  const parsed = _parseSmartText(raw);
   const el = document.getElementById('import-counter');
-  el.textContent = raw.trim() ? `${n} pregunta${n !== 1 ? 's' : ''} detectada${n !== 1 ? 's' : ''}` : '';
+  const btn = document.getElementById('btn-preview-text');
+
+  if (!raw.trim()) {
+    el.textContent = '';
+    btn.style.display = 'none';
+    clearImportPreview();
+    return;
+  }
+
+  const noCorrect = parsed.filter(q => q.correctIndex < 0).length;
+  el.textContent = parsed.length
+    ? `${parsed.length} pregunta${parsed.length !== 1 ? 's' : ''} detectada${parsed.length !== 1 ? 's' : ''}${noCorrect ? ` · ⚠️ ${noCorrect} sin correcta marcada` : ''}`
+    : '⚠️ No se detectaron preguntas válidas';
+  el.style.color = parsed.length ? 'var(--accent2)' : 'var(--danger)';
+  btn.style.display = parsed.length ? 'inline-flex' : 'none';
+
+  // Hide old preview if text changed
+  clearImportPreview();
 }
 
-function importQuestions() {
+function previewImport() {
   const raw = document.getElementById('import-text').value.trim();
-  if (!raw) { toast('Pegá preguntas primero', true); return; }
-  const parsed = _parseTextBlocks(raw);
-  if (!parsed.length) { toast('No se encontraron preguntas válidas', true); return; }
-  parsed.forEach(q => addQuestion(q));
-  toast(`${parsed.length} pregunta${parsed.length > 1 ? 's' : ''} importada${parsed.length > 1 ? 's' : ''} ✓`);
+  if (!raw) return;
+  const parsed = _parseSmartText(raw);
+  if (!parsed.length) { toast('No se detectaron preguntas válidas', true); return; }
+
+  _pendingImport = parsed;
+  const noCorrect = parsed.filter(q => q.correctIndex < 0).length;
+
+  document.getElementById('import-preview-count').textContent =
+    `${parsed.length} pregunta${parsed.length !== 1 ? 's' : ''} listas para importar`;
+  document.getElementById('import-preview-warn').textContent =
+    noCorrect ? `⚠️ ${noCorrect} sin respuesta marcada (se usará la primera)` : '';
+
+  document.getElementById('import-preview-list').innerHTML = parsed.map((q, i) => {
+    const correctOpt = q.correctIndex >= 0 ? q.options[q.correctIndex] : null;
+    const warn = q.correctIndex < 0;
+    return `
+      <div class="import-preview-row ${warn ? 'warn' : ''}">
+        <span class="ipq-num">${i + 1}</span>
+        <span class="ipq-text" title="${q.text}">${q.text}</span>
+        ${correctOpt
+          ? `<span class="ipq-correct">✓ ${correctOpt.length > 22 ? correctOpt.slice(0, 22) + '…' : correctOpt}</span>`
+          : `<span class="ipq-nowarn">⚠️ sin correcta</span>`}
+      </div>`;
+  }).join('');
+
+  document.getElementById('import-preview-box').style.display = 'block';
+  document.getElementById('import-preview-box').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearImportPreview() {
+  _pendingImport = null;
+  document.getElementById('import-preview-box').style.display = 'none';
+}
+
+function confirmImport() {
+  const questions = _pendingImport;
+  if (!questions?.length) return;
+  // Fix unmarked: default to index 0
+  questions.forEach(q => { if (q.correctIndex < 0) q.correctIndex = 0; });
+  questions.forEach(q => addQuestion(q));
+  toast(`${questions.length} pregunta${questions.length !== 1 ? 's' : ''} importada${questions.length !== 1 ? 's' : ''} ✓`);
   document.getElementById('import-text').value = '';
   document.getElementById('import-counter').textContent = '';
+  document.getElementById('btn-preview-text').style.display = 'none';
+  clearImportPreview();
   toggleImport();
 }
+
+// Keep old name as alias so CSV tab still works
+function importQuestions() { previewImport(); }
 
 // ─── CSV import ───────────────────────────────────────────────────────────────
 function _parseCSV(raw) {
