@@ -218,7 +218,7 @@
         </div>
         <div class="nav-label" style="overflow:hidden;min-width:0">
           <div id="user-name" style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
-          <div style="font-size:11px;color:var(--muted)">Administrador</div>
+          <div id="user-role-label" style="font-size:11px;color:var(--muted)">Creador</div>
         </div>
         <button onclick="logout()" title="Cerrar sesión" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;flex-shrink:0;padding:4px" class="nav-label">⏻</button>
       </div>
@@ -446,6 +446,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       Object.assign(_user, fresh);
       localStorage.setItem('synapto_user', JSON.stringify(_user));
       if (fresh.name) { el.textContent = fresh.name; av.textContent = fresh.name.charAt(0).toUpperCase(); }
+      const roleLabel = fresh.role === 'admin' ? 'Admin' : 'Creador';
+      document.getElementById('user-role-label').textContent = roleLabel;
       if (fresh.role === 'admin') document.getElementById('nav-users').style.display = 'flex';
     }
   } catch {}
@@ -570,7 +572,7 @@ async function loadUsers() {
               <td style="padding:12px 14px;color:var(--muted)">${new Date(u.created_at).toLocaleDateString('es-CL')}</td>
               <td style="padding:12px 14px">
                 <select onchange="changeUserRole('${u.id}', this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:13px;${u.id === _user.id ? 'opacity:.4;pointer-events:none' : ''}">
-                  <option value="user" ${u.role !== 'admin' ? 'selected' : ''}>Usuario</option>
+                  <option value="user" ${u.role !== 'admin' ? 'selected' : ''}>Creador</option>
                   <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
                 </select>
               </td>
