@@ -21,8 +21,10 @@ db.exec(`
     correct_index INTEGER NOT NULL,
     time_limit INTEGER DEFAULT 20,
     position INTEGER DEFAULT 0,
+    tag TEXT DEFAULT NULL,
     FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
   );
 `);
+try { db.prepare('ALTER TABLE questions ADD COLUMN tag TEXT DEFAULT NULL').run(); } catch {}
 
 module.exports = db;

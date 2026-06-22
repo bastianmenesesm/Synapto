@@ -303,6 +303,7 @@
   <div id="s-reveal" class="hidden" style="width:100%;display:flex;flex-direction:column;align-items:center">
     <p class="q-text-big" id="reveal-q-text" style="font-size:24px;margin-bottom:24px"></p>
     <div class="options-grid" id="reveal-options-grid"></div>
+    <div id="reveal-result-summary" style="display:flex;gap:16px;margin-top:18px;margin-bottom:4px"></div>
     <div class="tally" id="tally-grid"></div>
     <div class="rank-list" style="margin-top:32px" id="reveal-ranking"></div>
   </div>
@@ -576,6 +577,25 @@ function renderReveal(correctIndex, tally, ranking, questionText, options, teamM
       <span>${opt}</span>
     </div>
   `).join('');
+
+  const correct = tally[correctIndex] || 0;
+  const correctPct = total > 1 ? Math.round(correct / total * 100) : (correct > 0 ? 100 : 0);
+  document.getElementById('reveal-result-summary').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.4);border-radius:12px;padding:10px 20px">
+      <span style="font-size:28px">✅</span>
+      <div>
+        <div style="font-size:26px;font-weight:900;color:#4CAF50;line-height:1">${correct}</div>
+        <div style="font-size:12px;color:var(--muted);font-weight:600">acertaron · ${correctPct}%</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;background:rgba(230,57,70,.15);border:1px solid rgba(230,57,70,.4);border-radius:12px;padding:10px 20px">
+      <span style="font-size:28px">❌</span>
+      <div>
+        <div style="font-size:26px;font-weight:900;color:#E63946;line-height:1">${total - correct}</div>
+        <div style="font-size:12px;color:var(--muted);font-weight:600">fallaron · ${100 - correctPct}%</div>
+      </div>
+    </div>
+  `;
 
   document.getElementById('tally-grid').innerHTML = tally.map((count, i) => `
     <div class="tally-item t${i}">

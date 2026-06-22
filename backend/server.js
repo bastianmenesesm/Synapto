@@ -322,11 +322,11 @@ app.post('/api/quizzes', requireAuth, (req, res) => {
   db.prepare('INSERT INTO quizzes (id, title, user_id) VALUES (?, ?, ?)').run(id, title, req.user.id);
 
   const insertQ = db.prepare(`
-    INSERT INTO questions (id, quiz_id, text, options, correct_index, time_limit, position)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO questions (id, quiz_id, text, options, correct_index, time_limit, position, tag)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   questions.forEach((q, i) => {
-    insertQ.run(uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i);
+    insertQ.run(uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i, q.tag?.trim() || null);
   });
 
   res.json({ id });
@@ -345,11 +345,11 @@ app.put('/api/quizzes/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
 
   const insertQ = db.prepare(`
-    INSERT INTO questions (id, quiz_id, text, options, correct_index, time_limit, position)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO questions (id, quiz_id, text, options, correct_index, time_limit, position, tag)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   questions.forEach((q, i) => {
-    insertQ.run(uuidv4(), req.params.id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i);
+    insertQ.run(uuidv4(), req.params.id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i, q.tag?.trim() || null);
   });
 
   res.json({ ok: true });
@@ -371,7 +371,7 @@ app.get('/api/quizzes/:id/stats', requireAuth, (req, res) => {
   const results = db.prepare('SELECT * FROM game_results WHERE quiz_id = ? ORDER BY played_at DESC').all(req.params.id);
   const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(req.params.id);
 
-  if (!results.length) return res.json({ playCount: 0, avgScore: 0, avgPlayers: 0, mostMissedQuestion: null, recentGames: [] });
+  if (!results.length) return res.json({ playCount: 0, avgScore: 0, avgPlayers: 0, mostMissedQuestion: null, recentGames: [], allQuestions: [] });
 
   const playCount = results.length;
   const avgScore = Math.round(results.reduce((s, r) => s + r.avg_score, 0) / playCount);
@@ -403,13 +403,34 @@ app.get('/api/quizzes/:id/stats', requireAuth, (req, res) => {
     }
   });
 
-  const recentGames = results.slice(0, 5).map(r => ({
+  // Build allQuestions array with aggregated tally
+  const allQuestions = questions.map((q, i) => {
+    const tally = aggregated[i];
+    const totalAnswers = tally.reduce((s, v) => s + v, 0);
+    let opts;
+    try { opts = JSON.parse(q.options); } catch { opts = []; }
+    const correctPct = totalAnswers > 0 ? Math.round((tally[q.correct_index] || 0) / totalAnswers * 100) : 0;
+    const wrongPct = 100 - correctPct;
+    return {
+      position: i + 1,
+      text: q.text,
+      options: opts,
+      correctIndex: q.correct_index,
+      tag: q.tag || null,
+      tally,
+      totalAnswers,
+      correctPct,
+      wrongPct
+    };
+  });
+
+  const recentGames = results.map(r => ({
     playedAt: r.played_at,
     playerCount: r.player_count,
     avgScore: Math.round(r.avg_score)
   }));
 
-  res.json({ playCount, avgScore, avgPlayers, mostMissedQuestion, recentGames });
+  res.json({ playCount, avgScore, avgPlayers, mostMissedQuestion, recentGames, allQuestions });
 });
 
 app.post('/api/games', requireAuth, async (req, res) => {

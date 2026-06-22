@@ -1149,6 +1149,10 @@ function addQuestion(data = null) {
       </div>
       <div class="opt-rows">${optsHtml}</div>
       <button type="button" class="opt-add-btn" onclick="addOption(this)" ${initOpts.length >= 4 ? 'disabled' : ''}>+ Agregar opción</button>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px;color:var(--muted);flex-shrink:0">🏷️ Etiqueta</span>
+        <input type="text" class="q-tag" maxlength="30" placeholder="Ej: Cambio Climático (opcional)" value="${data?.tag || ''}" style="flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"/>
+      </div>
       <input type="hidden" class="q-correct" value="${safeCorrect}"/>
     </div>
   `;
@@ -1404,7 +1408,8 @@ async function saveQuiz() {
       }
       return;
     }
-    questions.push({ text, options, correctIndex, timeLimit });
+    const tag = card.querySelector('.q-tag')?.value.trim() || null;
+    questions.push({ text, options, correctIndex, timeLimit, tag });
   });
 
   if (!valid) {
@@ -2208,25 +2213,57 @@ async function showQuizStats(id, title) {
       return;
     }
 
-    const missedHtml = s.mostMissedQuestion ? `
-      <div class="missed-card">
-        <div class="missed-card-title">⚠️ Pregunta más fallada</div>
-        <div class="missed-card-text">${s.mostMissedQuestion.position}. ${s.mostMissedQuestion.text}</div>
-        <div class="missed-pct-wrap">
-          <div class="missed-pct-bar"><div class="missed-pct-fill" id="missed-fill" style="width:0%"></div></div>
-          <div class="missed-pct-num">${s.mostMissedQuestion.wrongPct}% erró</div>
-        </div>
+    const optColors = ['#E63946','#2196F3','#FF9800','#4CAF50'];
+    const letters = ['A','B','C','D'];
+
+    // All questions sorted by wrongPct DESC
+    const sortedQs = (s.allQuestions || []).slice().sort((a, b) => b.wrongPct - a.wrongPct);
+    const allQHtml = sortedQs.length ? `
+      <p style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Preguntas por dificultad</p>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+        ${sortedQs.map(q => {
+          const truncText = q.text.length > 60 ? q.text.slice(0, 60) + '…' : q.text;
+          const barsHtml = (q.options || []).map((opt, j) => {
+            const count = q.tally[j] || 0;
+            const pct = q.totalAnswers > 0 ? Math.round(count / q.totalAnswers * 100) : 0;
+            const isCorrect = j === q.correctIndex;
+            return `<div style="display:flex;align-items:center;gap:6px;font-size:12px">
+              <span style="font-weight:700;color:${optColors[j]};width:14px;flex-shrink:0">${letters[j]}</span>
+              <div style="flex:1;height:6px;background:var(--surface2);border-radius:999px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${isCorrect ? '#4CAF50' : optColors[j]};border-radius:999px;transition:width .6s ease"></div>
+              </div>
+              <span style="color:var(--muted);width:30px;text-align:right">${pct}%</span>
+            </div>`;
+          }).join('');
+          return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;border-left:3px solid ${q.wrongPct > 60 ? 'var(--danger)' : q.wrongPct > 30 ? '#FF9800' : 'var(--success)'}">
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+              <span style="font-size:11px;color:var(--muted);flex-shrink:0">P${q.position}</span>
+              <span style="font-size:13px;font-weight:600;flex:1">${_esc(truncText)}</span>
+              <span style="font-size:13px;font-weight:700;color:var(--danger);white-space:nowrap">${q.wrongPct}% erró</span>
+              <span style="font-size:13px;font-weight:700;color:var(--success);white-space:nowrap">${q.correctPct}% ok</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">${barsHtml}</div>
+            ${q.tag ? `<div style="margin-top:6px;font-size:11px;color:var(--accent2)">🏷️ ${_esc(q.tag)}</div>` : ''}
+          </div>`;
+        }).join('')}
       </div>` : '';
 
-    const recentHtml = s.recentGames.length ? `
-      <p style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Partidas recientes</p>
-      ${s.recentGames.map(g => `
-        <div class="recent-game-row">
-          <span style="flex:1;color:var(--muted)">${new Date(g.playedAt).toLocaleDateString('es-CL', {day:'numeric',month:'short',year:'numeric'})}</span>
-          <span style="display:flex;align-items:center;gap:4px"><span style="font-size:16px">👥</span>${g.playerCount}</span>
-          <span style="display:flex;align-items:center;gap:4px;color:var(--accent2);font-weight:700"><span style="font-size:14px">⭐</span>${g.avgScore.toLocaleString()} pts</span>
-        </div>
-      `).join('')}` : '';
+    // Games history — all games
+    const gamesHtml = s.recentGames.length ? `
+      <p style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Historial de partidas (${s.recentGames.length})</p>
+      <div style="max-height:200px;overflow-y:auto">
+        ${s.recentGames.map(g => {
+          const d = new Date(g.playedAt);
+          const dateStr = d.toLocaleDateString('es-CL', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + d.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
+          const badgeColor = g.avgScore > 5000 ? '#4CAF50' : g.avgScore > 2000 ? '#FF9800' : '#E63946';
+          const badgeBg = g.avgScore > 5000 ? 'rgba(76,175,80,.15)' : g.avgScore > 2000 ? 'rgba(255,152,0,.15)' : 'rgba(230,57,70,.12)';
+          return `<div class="recent-game-row">
+            <span style="flex:1;color:var(--muted);font-size:12px">${dateStr}</span>
+            <span style="display:flex;align-items:center;gap:4px;font-size:13px"><span>👥</span>${g.playerCount}</span>
+            <span style="padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;color:${badgeColor};background:${badgeBg}">${g.avgScore.toLocaleString()} pts</span>
+          </div>`;
+        }).join('')}
+      </div>` : '';
 
     el.innerHTML = `
       <div class="stats-grid">
@@ -2234,17 +2271,9 @@ async function showQuizStats(id, title) {
         <div class="stats-tile"><div class="stats-tile-val">${s.avgPlayers}</div><div class="stats-tile-label">Jugadores promedio</div></div>
         <div class="stats-tile" style="grid-column:1/-1"><div class="stats-tile-val">${s.avgScore.toLocaleString()}</div><div class="stats-tile-label">Puntaje promedio por jugador</div></div>
       </div>
-      ${missedHtml}
-      ${recentHtml}
+      ${allQHtml}
+      ${gamesHtml}
     `;
-
-    // Animate the bar after render
-    if (s.mostMissedQuestion) {
-      setTimeout(() => {
-        const fill = document.getElementById('missed-fill');
-        if (fill) fill.style.width = s.mostMissedQuestion.wrongPct + '%';
-      }, 80);
-    }
   } catch (e) {
     document.getElementById('stats-content').innerHTML = `<div class="empty"><p>Error al cargar estadísticas.</p></div>`;
   }

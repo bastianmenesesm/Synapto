@@ -308,6 +308,7 @@
       <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
         <div id="final-ranking"></div>
       </div>
+      <button class="btn btn-primary" style="margin-top:20px;width:100%;background:rgba(78,205,196,.2);color:var(--accent2);border:1px solid var(--accent2)" onclick="showRepaso()">📚 Ver repaso</button>
     </div>
   </div>
 
@@ -336,6 +337,16 @@
         <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .2s infinite ease-in-out"></div>
         <div style="width:8px;height:8px;border-radius:50%;background:var(--accent2);animation:pulse 1s .4s infinite ease-in-out"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- REPASO screen -->
+  <div id="s-repaso" class="hidden">
+    <div class="logo"><h1>Synapto</h1></div>
+    <div style="padding:16px;max-width:480px;margin:0 auto;width:100%">
+      <h2 style="font-size:20px;font-weight:800;margin-bottom:16px;text-align:center">📚 Repaso</h2>
+      <div id="repaso-list" style="display:flex;flex-direction:column;gap:12px"></div>
+      <button class="btn btn-primary" style="margin-top:20px;width:100%" onclick="show('s-final')">← Volver al ranking</button>
     </div>
   </div>
 
@@ -403,6 +414,8 @@ let reactionSent = false;
 let myStreak = 0;
 // Pending result data stored during wait phase, revealed on question:reveal
 let _pendingResult = null;
+// Question history for repaso mode
+let _questionHistory = [];
 
 const EMOJIS = ['😎','🤩','🐱','🐶','🦊','🐸','🦁','🐯','🐻','🐼','🦄','🐲','🤖','👻','⚡','🔥'];
 
@@ -456,7 +469,7 @@ try {
 } catch {}
 
 function show(id) {
-  ['s-join','s-team','s-lobby','s-question','s-wait','s-result','s-final','s-started','s-disconnected'].forEach(s =>
+  ['s-join','s-team','s-lobby','s-question','s-wait','s-result','s-final','s-started','s-disconnected','s-repaso'].forEach(s =>
     document.getElementById(s).classList.add('hidden')
   );
   document.getElementById(id).classList.remove('hidden');
@@ -541,6 +554,7 @@ function connectSocket(code, name) {
   });
 
   socket.on('question:countdown', ({ seconds, index, total }) => {
+    if (index === 0) _questionHistory = [];
     myCorrect = false;
     reactionSent = false;
     // Reset wait screen for new question
@@ -562,6 +576,7 @@ function connectSocket(code, name) {
     myAnswerIndex = -1;
     _pendingResult = null;
     currentTimeLimit = timeLimit;
+    _questionHistory.push({ text, options, correctIndex: null, myAnswer: -1, index });
 
     // Dismiss any countdown overlay
     const overlay = document.getElementById('countdown-overlay');
@@ -672,6 +687,10 @@ function connectSocket(code, name) {
   });
 
   socket.on('question:reveal', ({ correctIndex, ranking }) => {
+    // Update history with revealed correct answer
+    const last = _questionHistory[_questionHistory.length - 1];
+    if (last) { last.correctIndex = correctIndex; last.myAnswer = myAnswerIndex; }
+
     // Phase 2: now we know which answer was correct
     const correct = myAnswerIndex !== -1 && myAnswerIndex === correctIndex;
     myCorrect = correct;
@@ -830,6 +849,32 @@ function showError(msg) {
   el.textContent = msg;
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 4000);
+}
+
+function showRepaso() {
+  const letters = ['A','B','C','D'];
+  const optColors = ['#E63946','#2196F3','#FF9800','#4CAF50'];
+  document.getElementById('repaso-list').innerHTML = _questionHistory.map((q, i) => {
+    const correct = q.myAnswer !== -1 && q.myAnswer === q.correctIndex;
+    const optionsHtml = (q.options || []).map((opt, j) => {
+      const isCorrect = j === q.correctIndex;
+      const isMine = j === q.myAnswer;
+      const border = isCorrect ? '2px solid #4CAF50' : isMine ? '2px solid #E63946' : '1px solid var(--border)';
+      const bg = isCorrect ? 'rgba(76,175,80,.15)' : isMine ? 'rgba(230,57,70,.1)' : 'var(--surface2)';
+      const icon = isCorrect ? '✅' : isMine ? '❌' : '';
+      return `<div style="padding:8px 12px;border-radius:8px;border:${border};background:${bg};font-size:13px;display:flex;gap:8px;align-items:center">
+        <span style="font-weight:700;color:${optColors[j]}">${letters[j]}</span>
+        <span style="flex:1">${_esc(opt)}</span>
+        ${icon ? `<span>${icon}</span>` : ''}
+      </div>`;
+    }).join('');
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;border-left:4px solid ${correct ? '#4CAF50' : '#E63946'}">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Pregunta ${i+1} ${correct ? '· ✅ Correcta' : '· ❌ Incorrecta'}</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">${_esc(q.text)}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${optionsHtml}</div>
+    </div>`;
+  }).join('');
+  show('s-repaso');
 }
 </script>
 </body>
