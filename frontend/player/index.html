@@ -63,6 +63,7 @@
     .ans-btn.a1 { background: #2196F3; }
     .ans-btn.a2 { background: #FF9800; }
     .ans-btn.a3 { background: #4CAF50; }
+    .ans-btn.selected { outline: 4px solid #fff; box-shadow: 0 0 0 6px rgba(255,255,255,.25); }
     .ans-btn.correct { outline: 4px solid #fff; transform: scale(1.03); }
     .ans-btn.wrong { opacity: .3; }
     .ans-btn:disabled { cursor: default; }
@@ -394,11 +395,14 @@ let myName = '';
 let myEmoji = '😎';
 let myScore = 0;
 let myCorrect = false;
+let myAnswerIndex = -1;
 let currentTimeLimit = 20;
 let timerInterval = null;
 let savedCode = '';
 let reactionSent = false;
 let myStreak = 0;
+// Pending result data stored during wait phase, revealed on question:reveal
+let _pendingResult = null;
 
 const EMOJIS = ['😎','🤩','🐱','🐶','🦊','🐸','🦁','🐯','🐻','🐼','🦄','🐲','🤖','👻','⚡','🔥'];
 
@@ -475,13 +479,13 @@ function connectSocket(code, name) {
     if (teamMode && teams && teams.length) {
       document.getElementById('team-player-name').textContent = `Jugás como: ${name}`;
       document.getElementById('team-buttons').innerHTML = teams.map(t => `
-        <button onclick="joinTeam('${t.id}')" style="
+        <button onclick="joinTeam('${_esc(t.id)}')" style="
           display:flex;align-items:center;gap:12px;padding:14px 18px;
           background:var(--surface2);border:2px solid ${t.color};border-radius:12px;
           color:var(--text);font-size:16px;font-weight:700;cursor:pointer;
           transition:background .15s,transform .1s;width:100%;text-align:left">
           <div style="width:16px;height:16px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
-          ${t.name}
+          ${_esc(t.name)}
         </button>
       `).join('');
       show('s-team');
@@ -535,11 +539,13 @@ function connectSocket(code, name) {
   });
 
   socket.on('question:start', ({ index, total, text, options, timeLimit }) => {
+    myAnswerIndex = -1;
+    _pendingResult = null;
     currentTimeLimit = timeLimit;
 
     // Dismiss any countdown overlay
     const overlay = document.getElementById('countdown-overlay');
-    if (overlay) overlay.remove();
+    if (overlay) overlay.classList.add('hidden');
 
     document.getElementById('q-counter').textContent = `P ${index + 1}/${total}`;
     document.getElementById('q-text').textContent = text;
@@ -582,45 +588,22 @@ function connectSocket(code, name) {
     fill.style.background = color;
   });
 
-  socket.on('player:answer:result', ({ correct, correctIndex, score, streak, rank, totalPlayers }) => {
+  socket.on('player:answer:result', ({ score, streak, rank, totalPlayers, teamMode, teamScore }) => {
     myScore = score;
-    myCorrect = correct;
     myStreak = streak || 0;
     clearInterval(timerInterval);
-    document.querySelectorAll('.ans-btn').forEach((btn, i) => {
-      btn.disabled = true;
-      if (i === correctIndex) btn.classList.add('correct');
-      else btn.classList.add('wrong');
-    });
 
-    // Populate wait screen
-    document.getElementById('wait-result-icon').textContent = correct ? '✅' : '❌';
-    document.getElementById('wait-result-msg').textContent = correct ? '¡Correcto!' : 'Incorrecto';
-    const displayScore = (teamMode && teamScore != null) ? teamScore : score;
-    document.getElementById('wait-score').textContent = displayScore.toLocaleString('es');
-    document.getElementById('wait-score-display').style.display = 'block';
-    const scoreLabel = document.querySelector('#wait-score-display div');
-    if (scoreLabel) scoreLabel.textContent = teamMode ? 'puntos del equipo' : 'puntos totales';
+    // Save result data — shown only when admin reveals
+    _pendingResult = { score, streak, rank, totalPlayers, teamMode, teamScore };
 
-    const streakEl = document.getElementById('wait-streak-display');
-    if (streak >= 2) {
-      streakEl.textContent = `🔥 ¡Racha de ${streak}!`;
-      streakEl.style.display = 'block';
-    } else {
-      streakEl.style.display = 'none';
-    }
+    // Phase 1: neutral wait screen — no correct/wrong yet
+    document.getElementById('wait-result-icon').textContent = '⏳';
+    document.getElementById('wait-result-msg').textContent = 'Respuesta enviada';
+    document.getElementById('wait-score-display').style.display = 'none';
+    document.getElementById('wait-streak-display').style.display = 'none';
+    document.getElementById('wait-rank-display').style.display = 'none';
 
-    const rankEl = document.getElementById('wait-rank-display');
-    if (rank && totalPlayers) {
-      const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🏅';
-      const label = teamMode ? 'equipo' : 'jugador';
-      rankEl.textContent = `${medal} ${rank}° ${label} de ${totalPlayers}`;
-      rankEl.style.display = 'block';
-    } else {
-      rankEl.style.display = 'none';
-    }
-
-    setTimeout(() => show('s-wait'), 800);
+    show('s-wait');
   });
 
   socket.on('answer:progress', ({ answered, total, ranking, teamMode }) => {
@@ -669,12 +652,48 @@ function connectSocket(code, name) {
   });
 
   socket.on('question:reveal', ({ correctIndex, ranking }) => {
-    // Sound after reveal so players can't copy each other
-    PlayerSFX.play(myCorrect ? 'correct' : 'wrong');
+    // Phase 2: now we know which answer was correct
+    const correct = myAnswerIndex !== -1 && myAnswerIndex === correctIndex;
+    myCorrect = correct;
 
-    document.getElementById('r-icon').textContent = myCorrect ? '✅' : '❌';
-    document.getElementById('r-msg').textContent = myCorrect ? '¡Correcto!' : 'Incorrecto';
-    document.getElementById('r-pts').textContent = `Tu puntaje: ${myScore.toLocaleString()} pts`;
+    // Mark answer buttons correct/wrong
+    document.querySelectorAll('.ans-btn').forEach((btn, i) => {
+      if (i === correctIndex) btn.classList.add('correct');
+      else if (i === myAnswerIndex && !correct) btn.classList.add('wrong');
+    });
+
+    // Update wait-screen with result
+    document.getElementById('wait-result-icon').textContent = correct ? '✅' : '❌';
+    document.getElementById('wait-result-msg').textContent = correct ? '¡Correcto!' : 'Incorrecto';
+
+    const pd = _pendingResult;
+    if (pd) {
+      const displayScore = (pd.teamMode && pd.teamScore != null) ? pd.teamScore : pd.score;
+      document.getElementById('wait-score').textContent = displayScore.toLocaleString('es');
+      document.getElementById('wait-score-display').style.display = 'block';
+      const scoreLabel = document.querySelector('#wait-score-display div');
+      if (scoreLabel) scoreLabel.textContent = pd.teamMode ? 'puntos del equipo' : 'puntos totales';
+
+      const streakEl = document.getElementById('wait-streak-display');
+      if (pd.streak >= 2) {
+        streakEl.textContent = `🔥 ¡Racha de ${pd.streak}!`;
+        streakEl.style.display = 'block';
+      } else {
+        streakEl.style.display = 'none';
+      }
+
+      const rankEl = document.getElementById('wait-rank-display');
+      if (pd.rank && pd.totalPlayers) {
+        const medal = pd.rank === 1 ? '🥇' : pd.rank === 2 ? '🥈' : pd.rank === 3 ? '🥉' : '🏅';
+        const label = pd.teamMode ? 'equipo' : 'jugador';
+        rankEl.textContent = `${medal} ${pd.rank}° ${label} de ${pd.totalPlayers}`;
+        rankEl.style.display = 'block';
+      } else {
+        rankEl.style.display = 'none';
+      }
+    }
+
+    PlayerSFX.play(correct ? 'correct' : 'wrong');
     document.querySelectorAll('.react-btn').forEach(b => b.classList.remove('sent'));
     reactionSent = false;
 
@@ -731,7 +750,11 @@ function joinTeam(teamId) {
 }
 
 function sendAnswer(idx) {
-  document.querySelectorAll('.ans-btn').forEach(b => b.disabled = true);
+  myAnswerIndex = idx;
+  document.querySelectorAll('.ans-btn').forEach((b, i) => {
+    b.disabled = true;
+    if (i === idx) b.classList.add('selected');
+  });
   clearInterval(timerInterval);
   socket.emit('player:answer', { answerIndex: idx });
 }

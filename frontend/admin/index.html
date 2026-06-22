@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script>(function(){const t=localStorage.getItem('synapto-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <script src="../config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -584,6 +585,7 @@ Opción 4</div>
         <div style="display:flex;gap:10px;align-items:center">
           <span id="game-status-badge" class="status-badge status-lobby"><span class="dot-pulse"></span> Lobby</span>
           <a id="screen-link" href="#" target="_blank" class="btn btn-ghost btn-sm">🖥️ Pantalla</a>
+          <button class="btn btn-ghost btn-sm" id="presenter-copy-btn" onclick="copyPresenterLink()" title="Copiar link de pantalla con controles de presentador">🎤 Link presentador</button>
           <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;">
             <button id="mute-btn" onclick="toggleMute()" title="Silenciar" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:18px;line-height:1;padding:0">🔊</button>
             <input type="range" id="vol-slider" min="0" max="1" step="0.05" value="0.7" style="width:80px;cursor:pointer;accent-color:var(--accent2)" oninput="sound.setVolume(+this.value);document.getElementById('mute-btn').textContent=+this.value===0?'🔇':'🔊'"/>
@@ -744,6 +746,22 @@ Opción 4</div>
 </div>
 
 <!-- Preview modal -->
+<div id="modal-presenter" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePresenterModal()">
+  <div class="modal" style="max-width:380px;text-align:center;padding:32px 28px">
+    <button onclick="closePresenterModal()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">✕</button>
+    <p style="font-size:18px;font-weight:800;margin-bottom:6px">🎤 Link de presentador</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Escaneá con tu celular para controlar el juego</p>
+    <div style="background:#fff;border-radius:16px;padding:14px;display:inline-block;margin-bottom:18px">
+      <canvas id="presenter-qr-canvas"></canvas>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:16px">
+      <span id="presenter-qr-url" style="font-size:11px;color:var(--muted);flex:1;word-break:break-all;text-align:left"></span>
+      <button onclick="copyPresenterUrl()" id="copy-url-btn" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Copiar</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted)">El link expira cuando cerrás sesión</p>
+  </div>
+</div>
+
 <div id="modal-preview" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePreviewModal()">
   <div class="modal" style="max-width:620px;padding:0;overflow:hidden">
     <div class="preview-header">
@@ -1469,6 +1487,7 @@ async function startGame(quizId, title, opts = {}) {
   document.getElementById('game-code').textContent = game.code;
   document.getElementById('game-join-url').textContent = game.joinUrl;
   document.getElementById('screen-link').href = `/screen/?code=${game.code}`;
+  document.getElementById('presenter-copy-btn').dataset.code = game.code;
   document.getElementById('player-lobby').innerHTML = '';
   document.getElementById('player-count').textContent = '0';
   setBadge('lobby');
@@ -1635,6 +1654,33 @@ function enterRankingState() {
   setButtons(false, true, false);
 }
 
+function copyPresenterLink() {
+  const btn = document.getElementById('presenter-copy-btn');
+  const code = btn?.dataset.code;
+  if (!code || !_token) return;
+  const base = window.location.origin;
+  const url = `${base}/screen/?code=${code}&token=${encodeURIComponent(_token)}`;
+  document.getElementById('presenter-qr-url').textContent = url;
+  document.getElementById('modal-presenter').style.display = 'flex';
+  QRCode.toCanvas(document.getElementById('presenter-qr-canvas'), url, {
+    width: 240, margin: 1,
+    color: { dark: '#1a1a2e', light: '#ffffff' }
+  });
+}
+
+function closePresenterModal() {
+  document.getElementById('modal-presenter').style.display = 'none';
+}
+
+function copyPresenterUrl() {
+  const url = document.getElementById('presenter-qr-url').textContent;
+  const copyBtn = document.getElementById('copy-url-btn');
+  navigator.clipboard.writeText(url).then(() => {
+    copyBtn.textContent = '✅';
+    setTimeout(() => { copyBtn.textContent = 'Copiar'; }, 2000);
+  }).catch(() => { prompt('Copiá este link:', url); });
+}
+
 function closeGame() {
   if (socket) { socket.disconnect(); socket = null; }
   currentGame = null;
@@ -1751,7 +1797,7 @@ function showRanking(ranking) {
         <div style="margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
             <span style="font-size:18px;width:28px;text-align:center">${medals[i] || (i+1)+'°'}</span>
-            <span style="flex:1;font-weight:600;font-size:15px">${p.name}</span>
+            <span style="flex:1;font-weight:600;font-size:15px">${_esc(p.name)}</span>
             <span style="color:var(--accent2);font-weight:800;font-size:16px">${p.score.toLocaleString()} pts</span>
           </div>
           <div style="height:6px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-left:38px">
@@ -1781,7 +1827,7 @@ function showFinalRanking(ranking) {
             <div class="rank-pos">${medals[realIdx] || (realIdx+1)+'°'}</div>
             <div style="flex:1">
               <div style="display:flex;align-items:center;gap:8px">
-                <span class="rank-name">${p.name}</span>
+                <span class="rank-name">${_esc(p.name)}</span>
                 <span class="rank-score">${p.score.toLocaleString()} pts</span>
               </div>
               <div class="rank-bar-wrap">
@@ -1828,7 +1874,7 @@ function buildPodium(top5) {
     if (!player) return `<div class="podium-col"></div>`;
     return `
       <div class="podium-col">
-        <div class="podium-name">${player.name}</div>
+        <div class="podium-name">${_esc(player.name)}</div>
         <div class="podium-score">${player.score.toLocaleString()} pts</div>
         <div class="podium-base ${medalClass}">${label}</div>
       </div>

@@ -10,13 +10,17 @@ const db = require('./db');
 
 const app = express();
 const server = http.createServer(app);
-const JWT_SECRET = process.env.JWT_SECRET || 'synapto_dev_secret_change_in_prod';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) { console.error('FATAL: JWT_SECRET env var is not set'); process.exit(1); }
+
+const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:3000')
+  .split(',').map(s => s.trim());
 
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] }
 });
 
-app.use(cors());
+app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json());
 
 // ─── Migrations ───────────────────────────────────────────────────────────────
@@ -296,9 +300,23 @@ app.get('/api/quizzes/:id', requireAuth, (req, res) => {
   res.json({ ...quiz, questions });
 });
 
+function validateQuestions(questions) {
+  if (!Array.isArray(questions) || questions.length === 0) return 'Se requiere al menos una pregunta';
+  for (const q of questions) {
+    if (!q.text?.trim()) return 'Cada pregunta debe tener texto';
+    if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) return 'Cada pregunta debe tener 2–4 opciones';
+    if (!q.options.every(o => typeof o === 'string' && o.trim())) return 'Todas las opciones deben ser texto no vacío';
+    const ci = parseInt(q.correctIndex, 10);
+    if (!Number.isInteger(ci) || ci < 0 || ci >= q.options.length) return 'correctIndex fuera de rango';
+  }
+  return null;
+}
+
 app.post('/api/quizzes', requireAuth, (req, res) => {
   const { title, questions } = req.body;
-  if (!title || !questions?.length) return res.status(400).json({ error: 'Título y preguntas requeridos' });
+  if (!title) return res.status(400).json({ error: 'Título requerido' });
+  const err = validateQuestions(questions);
+  if (err) return res.status(400).json({ error: err });
 
   const id = uuidv4();
   db.prepare('INSERT INTO quizzes (id, title, user_id) VALUES (?, ?, ?)').run(id, title, req.user.id);
@@ -308,7 +326,7 @@ app.post('/api/quizzes', requireAuth, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   questions.forEach((q, i) => {
-    insertQ.run(uuidv4(), id, q.text, JSON.stringify(q.options), q.correctIndex, q.timeLimit || 20, i);
+    insertQ.run(uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i);
   });
 
   res.json({ id });
@@ -316,6 +334,10 @@ app.post('/api/quizzes', requireAuth, (req, res) => {
 
 app.put('/api/quizzes/:id', requireAuth, (req, res) => {
   const { title, questions } = req.body;
+  if (!title) return res.status(400).json({ error: 'Título requerido' });
+  const err = validateQuestions(questions);
+  if (err) return res.status(400).json({ error: err });
+
   const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
 
@@ -327,7 +349,7 @@ app.put('/api/quizzes/:id', requireAuth, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   questions.forEach((q, i) => {
-    insertQ.run(uuidv4(), req.params.id, q.text, JSON.stringify(q.options), q.correctIndex, q.timeLimit || 20, i);
+    insertQ.run(uuidv4(), req.params.id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i);
   });
 
   res.json({ ok: true });
@@ -395,7 +417,8 @@ app.post('/api/games', requireAuth, async (req, res) => {
   const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(quizId, req.user.id);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
 
-  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  let code;
+  do { code = Math.random().toString(36).substring(2, 8).toUpperCase(); } while (games[code]);
   const joinUrl = `${baseUrl || process.env.FRONTEND_URL || 'http://localhost:3000'}/player?code=${code}`;
 
   const qrDataUrl = await QRCode.toDataURL(joinUrl, {
@@ -405,6 +428,7 @@ app.post('/api/games', requireAuth, async (req, res) => {
 
   games[code] = createGameState(quizId);
   games[code].joinUrl = joinUrl;
+  games[code].qr = qrDataUrl;
 
   if (teamMode && Array.isArray(teams) && teams.length >= 2) {
     games[code].teamMode = true;
@@ -467,6 +491,7 @@ io.on('connection', (socket) => {
 
       const [oldId, playerData] = existing;
       delete game.players[oldId];
+      playerData.disconnected = false;
       game.players[socket.id] = playerData;
       socket.join(`game:${code}`);
       socket.gameCode = code;
@@ -542,6 +567,7 @@ io.on('connection', (socket) => {
       status: game.status,
       players: Object.values(game.players).map(p => ({ name: p.name, emoji: p.emoji, score: p.score, teamId: p.teamId || null })),
       joinUrl: game.joinUrl,
+      qr: game.qr || null,
       teamMode: game.teamMode,
       teams: game.teamMode ? getTeamCounts(game) : []
     };
@@ -581,7 +607,7 @@ io.on('connection', (socket) => {
         if (quiz?.user_id !== u.id && dbUser?.role !== 'admin') return;
       } catch { return; }
     }
-    if (game.status === 'countdown') return; // already counting down
+    if (game.status === 'countdown' || game.status === 'question') return;
 
     const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(game.quizId);
     game.currentQuestion++;
@@ -662,10 +688,14 @@ io.on('connection', (socket) => {
     const q = game.currentQ;
     if (!q) return;
 
-    player.answered = true;
-    player.lastAnswer = answerIndex;
+    const idx = parseInt(answerIndex, 10);
+    const options = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= options.length) return;
 
-    const correct = answerIndex === q.correct_index;
+    player.answered = true;
+    player.lastAnswer = idx;
+
+    const correct = idx === q.correct_index;
     if (correct) {
       const bonus = Math.round((game.timeLeft / q.time_limit) * 500);
       player.score += 500 + bonus;
@@ -695,7 +725,6 @@ io.on('connection', (socket) => {
     }
 
     socket.emit('player:answer:result', {
-      correct, correctIndex: q.correct_index,
       score: player.score, streak: player.streak,
       rank, totalPlayers: totalEntities,
       teamMode: game.teamMode, teamScore
@@ -715,7 +744,8 @@ io.on('connection', (socket) => {
       ranking: liveRanking, teamMode: game.teamMode
     });
 
-    const allAnswered = Object.values(game.players).every(p => p.answered);
+    const connected = Object.values(game.players).filter(p => !p.disconnected);
+    const allAnswered = connected.length > 0 && connected.every(p => p.answered);
     if (allAnswered) {
       clearInterval(game.questionTimer);
       revealAnswers(code, q);
@@ -747,20 +777,35 @@ io.on('connection', (socket) => {
     if (!code || !games[code]) return;
     const game = games[code];
     if (socket.role === 'player') {
-      delete game.players[socket.id];
+      const player = game.players[socket.id];
+      if (!player) return;
+      if (game.status === 'lobby') {
+        delete game.players[socket.id];
+        persistGame(code);
+      } else {
+        // Keep player in game for ranking; mark disconnected so they don't block allAnswered
+        player.disconnected = true;
+        // If everyone still connected has answered, reveal early
+        const connected = Object.values(game.players).filter(p => !p.disconnected);
+        if (game.status === 'question' && connected.length > 0 && connected.every(p => p.answered)) {
+          clearInterval(game.questionTimer);
+          revealAnswers(code, game.currentQ);
+        }
+      }
       io.to(`game:${code}`).emit('lobby:update', {
-        players: Object.values(game.players).map(p => ({ name: p.name, emoji: p.emoji, score: p.score, teamId: p.teamId || null })),
+        players: Object.values(game.players)
+          .filter(p => !p.disconnected)
+          .map(p => ({ name: p.name, emoji: p.emoji, score: p.score, teamId: p.teamId || null })),
         teamMode: game.teamMode,
         teams: game.teamMode ? getTeamCounts(game) : []
       });
-      if (game.status === 'lobby') persistGame(code);
     }
   });
 });
 
 function revealAnswers(code, q) {
   const game = games[code];
-  if (!game) return;
+  if (!game || game.status !== 'question') return;
   game.status = 'results';
 
   const options = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;

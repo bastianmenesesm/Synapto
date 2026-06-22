@@ -114,9 +114,16 @@
       animation: fadeSlideUp .5s .9s ease both;
     }
 
-    .player-bubbles { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 32px; max-width: 900px; }
-    .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 18px; font-size: 16px; animation: popIn .3s ease; display: flex; align-items: center; gap: 6px; }
-    @keyframes popIn { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+    .player-bubbles { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 32px; max-width: 980px; }
+    .bubble {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 10px 16px 8px; font-size: 15px; animation: popIn .35s cubic-bezier(.34,1.56,.64,1) ease;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-width: 72px; box-shadow: 0 4px 14px var(--shadow);
+    }
+    .bubble-emoji { font-size: 36px; line-height: 1; }
+    .bubble-name { font-size: 12px; font-weight: 700; color: var(--muted); text-align: center; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @keyframes popIn { from{transform:scale(0) rotate(-8deg);opacity:0} to{transform:scale(1) rotate(0);opacity:1} }
 
     /* Lobby entrance animations */
     @keyframes codeBlast {
@@ -307,6 +314,10 @@ let timerLimit = 20;
 let isDark = true;
 let socket = null;
 
+function _esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function toggleTheme() {
   isDark = !isDark;
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -385,9 +396,13 @@ if (!code) {
   socket = io(API);
   socket.emit('screen:join', { code });
 
-  socket.on('screen:state', ({ status, joinUrl, players, currentQuestion, currentReveal, finalRanking, teamMode, teams }) => {
+  socket.on('screen:state', ({ status, joinUrl, qr, players, currentQuestion, currentReveal, finalRanking, teamMode, teams }) => {
     document.getElementById('lobby-code').textContent = code;
     document.getElementById('lobby-url').textContent = joinUrl || '';
+    if (qr) {
+      const qrBlock = document.getElementById('qr-block');
+      qrBlock.innerHTML = `<img src="${qr}" style="display:block;width:220px;height:220px" alt="QR"/>`;
+    }
     updatePlayers(players, teamMode, teams);
 
     _presenterGameState = status;
@@ -538,7 +553,7 @@ function renderReveal(correctIndex, tally, ranking, questionText, options, teamM
           <div style="width:14px;height:14px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
           <div style="flex:1">
             <div style="display:flex;justify-content:space-between">
-              <span class="rank-name">${t.name}</span>
+              <span class="rank-name">${_esc(t.name)}</span>
               <span class="rank-pts">${t.score.toLocaleString()}</span>
             </div>
             <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(t.score/maxScore*100)}%;background:${t.color}"></div></div>
@@ -547,10 +562,10 @@ function renderReveal(correctIndex, tally, ranking, questionText, options, teamM
     : ranking.map((p, i) => `
         <div class="rank-item" style="animation-delay:${i*0.1}s">
           <span class="rank-pos">${medals[i] || '#'+(i+1)}</span>
-          <span style="font-size:22px">${p.emoji || ''}</span>
+          <span style="font-size:22px">${_esc(p.emoji || '')}</span>
           <div style="flex:1">
             <div style="display:flex;justify-content:space-between">
-              <span class="rank-name">${p.name}</span>
+              <span class="rank-name">${_esc(p.name)}</span>
               <span class="rank-pts">${p.score.toLocaleString()}</span>
             </div>
             <div class="rank-bar-wrap"><div class="rank-bar" style="width:${Math.round(p.score/maxScore*100)}%"></div></div>
@@ -574,7 +589,7 @@ function renderFinal(ranking, teamMode) {
         <div class="podium-col">
           <div class="podium-player" style="animation-delay:${podiumDelays[vi]}">
             <div style="width:32px;height:32px;border-radius:50%;background:${t.color};margin:0 auto 6px"></div>
-            <div class="podium-name">${t.name}</div>
+            <div class="podium-name">${_esc(t.name)}</div>
             <div class="podium-score">${t.score.toLocaleString()} pts</div>
             <div style="font-size:11px;color:var(--muted);margin-top:2px">${t.playerCount} jugador${t.playerCount !== 1 ? 'es' : ''}</div>
           </div>
@@ -587,7 +602,7 @@ function renderFinal(ranking, teamMode) {
       <div class="rank-item" style="animation-delay:${i*0.1}s">
         <span class="rank-pos" style="font-size:18px;min-width:36px">#${i+4}</span>
         <div style="width:14px;height:14px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
-        <span class="rank-name">${t.name}</span>
+        <span class="rank-name">${_esc(t.name)}</span>
         <span class="rank-pts">${t.score.toLocaleString()}</span>
       </div>`).join('');
   } else {
@@ -597,8 +612,8 @@ function renderFinal(ranking, teamMode) {
       return `
         <div class="podium-col">
           <div class="podium-player" style="animation-delay:${podiumDelays[vi]}">
-            <div class="podium-emoji">${p.emoji || '😎'}</div>
-            <div class="podium-name">${p.name}</div>
+            <div class="podium-emoji">${_esc(p.emoji || '😎')}</div>
+            <div class="podium-name">${_esc(p.name)}</div>
             <div class="podium-score">${p.score.toLocaleString()} pts</div>
           </div>
           <div class="podium-bar ${podiumClasses[vi]}">${medals[realIdx] || ''}</div>
@@ -609,8 +624,8 @@ function renderFinal(ranking, teamMode) {
     document.getElementById('podium-rest').innerHTML = rest.map((p, i) => `
       <div class="rank-item" style="animation-delay:${i*0.1}s">
         <span class="rank-pos" style="font-size:18px;min-width:36px">#${i+4}</span>
-        <span style="font-size:20px">${p.emoji || ''}</span>
-        <span class="rank-name">${p.name}</span>
+        <span style="font-size:20px">${_esc(p.emoji || '')}</span>
+        <span class="rank-name">${_esc(p.name)}</span>
         <span class="rank-pts">${p.score.toLocaleString()}</span>
       </div>`).join('');
   }
@@ -648,17 +663,17 @@ function updatePlayers(players, teamMode, teams) {
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:120px">
         <div style="display:flex;align-items:center;gap:6px;padding:4px 12px;background:${t.color}22;border:1px solid ${t.color};border-radius:99px">
           <div style="width:10px;height:10px;border-radius:50%;background:${t.color}"></div>
-          <span style="font-weight:700;font-size:14px;color:${t.color}">${t.name}</span>
+          <span style="font-weight:700;font-size:14px;color:${t.color}">${_esc(t.name)}</span>
           <span style="font-size:13px;color:var(--muted)">${byTeam[t.id]?.members.length || 0}</span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center">
-          ${(byTeam[t.id]?.members || []).map(p => `<div class="bubble" style="border:1px solid ${t.color}55"><span>${p.emoji || '😎'}</span><span>${p.name}</span></div>`).join('')}
+          ${(byTeam[t.id]?.members || []).map(p => `<div class="bubble" style="border:1px solid ${t.color}55"><span class="bubble-emoji">${_esc(p.emoji || '😎')}</span><span class="bubble-name">${_esc(p.name)}</span></div>`).join('')}
         </div>
       </div>
     `).join('');
   } else {
     document.getElementById('player-bubbles').innerHTML = (players || []).map(p =>
-      `<div class="bubble"><span>${p.emoji || '😎'}</span><span>${p.name}</span></div>`
+      `<div class="bubble"><span class="bubble-emoji">${_esc(p.emoji || '😎')}</span><span class="bubble-name">${_esc(p.name)}</span></div>`
     ).join('');
   }
 }
