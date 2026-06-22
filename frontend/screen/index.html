@@ -48,6 +48,25 @@
     .hdr-btn:hover { background: var(--accent); color: #fff; transform: scale(1.08); }
     .theme-btn { /* alias */ }
 
+    /* Volume control */
+    .vol-wrap { position: relative; display: flex; align-items: center; }
+    .vol-slider-pop {
+      display: none; position: absolute; bottom: calc(100% + 10px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 10px; box-shadow: 0 8px 24px var(--shadow);
+      flex-direction: column; align-items: center; gap: 8px; z-index: 200;
+    }
+    .vol-wrap:hover .vol-slider-pop,
+    .vol-wrap:focus-within .vol-slider-pop { display: flex; }
+    .vol-label { font-size: 11px; color: var(--muted); font-weight: 600; }
+    input[type=range].vol-range {
+      writing-mode: vertical-lr; direction: rtl;
+      width: 6px; height: 80px; cursor: pointer;
+      -webkit-appearance: slider-vertical; appearance: slider-vertical;
+      accent-color: var(--accent); background: transparent;
+    }
+
     /* Presenter bar */
     .presenter-bar {
       position: fixed; bottom: 0; left: 0; right: 0; z-index: 600;
@@ -231,7 +250,13 @@
   <div id="q-counter-header" style="font-size:14px;color:var(--muted)"></div>
   <div class="header-right">
     <span class="spectator-badge" id="spectator-badge">👁 ESPECTADOR</span>
-    <button class="hdr-btn" id="music-btn" onclick="toggleMusic()" title="Música">🔊</button>
+    <div class="vol-wrap">
+      <button class="hdr-btn" id="music-btn" onclick="toggleMusic()" title="Volumen">🔊</button>
+      <div class="vol-slider-pop">
+        <span class="vol-label" id="vol-label">50%</span>
+        <input type="range" class="vol-range" id="vol-range" min="0" max="100" value="50" oninput="setVolume(this.value)"/>
+      </div>
+    </div>
     <button class="hdr-btn" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">☀️</button>
     <button class="hdr-btn" id="fs-btn" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
     <div class="timer-ring" id="timer-ring" style="visibility:hidden">
@@ -342,11 +367,19 @@ document.addEventListener('fullscreenchange', () => {
 // ── Music ──
 let _audio = null;
 let _musicMuted = false;
+let _musicVolume = 0.5;
+
+function _volIcon(muted, vol) {
+  if (muted || vol === 0) return '🔇';
+  if (vol < 0.35) return '🔈';
+  if (vol < 0.7) return '🔉';
+  return '🔊';
+}
 function _playTrack(src, loop = true) {
   if (_audio) { _audio.pause(); _audio = null; }
   _audio = new Audio(src);
   _audio.loop = loop;
-  _audio.volume = _musicMuted ? 0 : 0.5;
+  _audio.volume = _musicMuted ? 0 : _musicVolume;
   _audio.play().catch(() => {});
 }
 function stopMusic() {
@@ -354,8 +387,16 @@ function stopMusic() {
 }
 function toggleMusic() {
   _musicMuted = !_musicMuted;
-  if (_audio) _audio.volume = _musicMuted ? 0 : 0.5;
-  document.getElementById('music-btn').textContent = _musicMuted ? '🔇' : '🔊';
+  if (_audio) _audio.volume = _musicMuted ? 0 : _musicVolume;
+  document.getElementById('music-btn').textContent = _volIcon(_musicMuted, _musicVolume);
+}
+function setVolume(val) {
+  _musicVolume = parseInt(val) / 100;
+  _musicMuted = _musicVolume === 0;
+  if (_audio) _audio.volume = _musicVolume;
+  const pct = Math.round(_musicVolume * 100);
+  document.getElementById('vol-label').textContent = pct + '%';
+  document.getElementById('music-btn').textContent = _volIcon(_musicMuted, _musicVolume);
 }
 
 // ── Presenter mode ──
