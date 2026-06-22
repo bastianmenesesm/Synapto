@@ -437,6 +437,24 @@ try {
   }
 } catch {}
 
+// Auto-reconnect if there's an active session saved
+try {
+  const sess = JSON.parse(localStorage.getItem('synapto_session') || 'null');
+  if (sess && sess.code && sess.name) {
+    savedCode = sess.code;
+    myName = sess.name;
+    if (sess.emoji) {
+      myEmoji = sess.emoji;
+      document.querySelectorAll('.emoji-opt').forEach(b => b.classList.toggle('selected', b.textContent === sess.emoji));
+    }
+    document.getElementById('inp-code').value = sess.code;
+    document.getElementById('inp-name').value = sess.name;
+    // Show reconnecting overlay before socket connects
+    show('s-disconnected');
+    connectSocket(sess.code, sess.name);
+  }
+} catch {}
+
 function show(id) {
   ['s-join','s-team','s-lobby','s-question','s-wait','s-result','s-final','s-started','s-disconnected'].forEach(s =>
     document.getElementById(s).classList.add('hidden')
@@ -473,6 +491,7 @@ function connectSocket(code, name) {
   });
 
   socket.on('player:joined', ({ name, teamMode, teams }) => {
+    try { localStorage.setItem('synapto_session', JSON.stringify({ code, name, emoji: myEmoji })); } catch {}
     document.getElementById('lobby-avatar').textContent = myEmoji;
     document.getElementById('lobby-name').textContent = `Jugás como: ${name}`;
 
@@ -509,6 +528,7 @@ function connectSocket(code, name) {
 
   socket.on('error', (msg) => {
     if (msg === 'El juego ya comenzó') {
+      try { localStorage.removeItem('synapto_session'); } catch {}
       show('s-started');
       const code = document.getElementById('inp-code').value.trim().toUpperCase() || savedCode;
       document.getElementById('btn-spectate').onclick = () => {
@@ -702,6 +722,7 @@ function connectSocket(code, name) {
   });
 
   socket.on('game:finished', ({ ranking }) => {
+    try { localStorage.removeItem('synapto_session'); } catch {}
     const myPos = ranking.findIndex(p => p.name === myName);
     PlayerSFX.play(myPos >= 0 && myPos < 3 ? 'fanfare' : 'finish');
 
