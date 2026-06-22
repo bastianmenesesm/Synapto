@@ -1132,16 +1132,20 @@ function addQuestion(data = null) {
     <div class="q-summary"></div>
     <div class="q-card-body">
       <div class="form-group">
-        <label>Enunciado</label>
-        <textarea class="q-text" placeholder="¿Cuál es la capital de Francia?" oninput="updateSummary(this)">${data ? data.text : ''}</textarea>
+        <label style="display:flex;justify-content:space-between;align-items:baseline">
+          Enunciado
+          <span class="q-char-counter" style="font-size:11px;color:var(--muted);font-weight:500"><span class="q-char-current">${data ? data.text.length : 0}</span> / 180</span>
+        </label>
+        <textarea class="q-text" maxlength="180" placeholder="¿Cuál es la capital de Francia?" oninput="updateSummary(this);updateTimeWarning(this)">${data ? data.text : ''}</textarea>
       </div>
       <div class="form-group" style="margin-top:10px">
         <label>Tiempo límite</label>
         <div class="time-presets">
           ${presetsHtml}
           <button type="button" class="time-preset ${customActive ? 'active' : ''}" onclick="setTime(this,'custom')">Personalizado</button>
-          <input type="number" class="time-custom-input q-time-hidden ${customActive ? 'show' : ''}" value="${timeVal}" min="5" max="300" placeholder="seg"/>
+          <input type="number" class="time-custom-input q-time-hidden ${customActive ? 'show' : ''}" value="${timeVal}" min="5" max="300" placeholder="seg" oninput="updateTimeWarning(this)"/>
         </div>
+        <div class="time-warn-hint" style="display:none;font-size:12px;margin-top:6px;color:#FF9800">⚠️ <span class="time-warn-text"></span></div>
       </div>
       <div class="opt-rows">${optsHtml}</div>
       <button type="button" class="opt-add-btn" onclick="addOption(this)" ${initOpts.length >= 4 ? 'disabled' : ''}>+ Agregar opción</button>
@@ -1161,7 +1165,7 @@ function _buildOptRowHtml(i, value, isCorrect) {
   const safe = (value || '').replace(/"/g, '&quot;');
   return `<div class="opt-row opt-row-${i}${isCorrect ? ' correct' : ''}" onclick="setCorrect(this)">
     <div class="opt-letter">${OPT_LABEL_LETTERS[i]}</div>
-    <input type="text" class="opt-input q-option" placeholder="Opción ${OPT_LABEL_LETTERS[i]}" value="${safe}" onclick="event.stopPropagation()"/>
+    <input type="text" class="opt-input q-option" maxlength="60" placeholder="Opción ${OPT_LABEL_LETTERS[i]}" value="${safe}" onclick="event.stopPropagation()" oninput="updateTimeWarning(this)"/>
     <div class="opt-check">✓</div>
     <button type="button" class="opt-remove" onclick="event.stopPropagation();removeOption(this)" title="Eliminar opción">×</button>
   </div>`;
@@ -1234,6 +1238,43 @@ function setTime(btn, val) {
   } else {
     customInput.classList.remove('show');
     customInput.value = val;
+  }
+  updateTimeWarning(btn);
+}
+
+function updateTimeWarning(el) {
+  const card = el.closest('.q-card');
+  if (!card) return;
+
+  // Update char counter on textarea
+  const textarea = card.querySelector('.q-text');
+  const counterEl = card.querySelector('.q-char-current');
+  if (textarea && counterEl) {
+    const len = textarea.value.length;
+    counterEl.textContent = len;
+    counterEl.parentElement.style.color = len > 160 ? '#E63946' : len > 130 ? '#FF9800' : 'var(--muted)';
+  }
+
+  // Calculate total chars (question + all options)
+  const qChars = textarea ? textarea.value.length : 0;
+  const optChars = [...card.querySelectorAll('.opt-input')].reduce((sum, i) => sum + i.value.length, 0);
+  const total = qChars + optChars;
+
+  // Minimum recommended time: 1 char ≈ 1/14 seg to read + 4 seg to decide
+  const minTime = Math.ceil(total / 14) + 4;
+
+  // Get current selected time — customInput always holds the canonical value
+  const selectedTime = parseInt(card.querySelector('.time-custom-input')?.value || 0);
+
+  const warnEl = card.querySelector('.time-warn-hint');
+  const warnText = card.querySelector('.time-warn-text');
+  if (!warnEl || !warnText) return;
+
+  if (total > 30 && selectedTime > 0 && selectedTime < minTime) {
+    warnText.textContent = `Con ${total} caracteres se recomiendan al menos ${minTime} segundos`;
+    warnEl.style.display = 'block';
+  } else {
+    warnEl.style.display = 'none';
   }
 }
 
