@@ -758,7 +758,10 @@ Opción 4</div>
           </div>
         </div>
         <div id="eval-questions-list"></div>
-        <button class="btn btn-ghost" style="margin-top:12px" onclick="addEvalQuestion()">+ Agregar pregunta</button>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn btn-ghost" style="flex:1" onclick="addEvalQuestion()">+ Agregar pregunta</button>
+          <button class="btn btn-ghost" style="flex:1" onclick="openEvalImport()">⬆️ Importar preguntas</button>
+        </div>
         <div style="display:flex;gap:10px;margin-top:20px">
           <button class="btn btn-ghost" onclick="hideEvalEditor()">Cancelar</button>
           <button class="btn btn-primary" onclick="saveEval()">Guardar evaluación</button>
@@ -773,12 +776,18 @@ Opción 4</div>
           <span class="eval-status-badge eval-status-open">● En vivo</span>
         </div>
         <div class="card" style="margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-            <div><span style="font-size:28px;font-weight:900" id="monitor-submitted">0</span><div style="font-size:12px;color:var(--muted)">enviaron</div></div>
-            <div><span style="font-size:28px;font-weight:900" id="monitor-active">0</span><div style="font-size:12px;color:var(--muted)">en progreso</div></div>
-            <div style="margin-left:auto;display:flex;gap:8px">
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;letter-spacing:2px" id="monitor-code"></div>
-              <button class="btn btn-danger btn-sm" onclick="closeEvaluation()">Cerrar evaluación</button>
+          <div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+              <canvas id="monitor-qr" width="140" height="140" style="border-radius:8px;background:#fff;padding:6px"></canvas>
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:15px;font-weight:800;letter-spacing:3px" id="monitor-code"></div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;gap:20px;flex-wrap:wrap">
+                <div><span style="font-size:28px;font-weight:900" id="monitor-submitted">0</span><div style="font-size:12px;color:var(--muted)">enviaron</div></div>
+                <div><span style="font-size:28px;font-weight:900" id="monitor-active">0</span><div style="font-size:12px;color:var(--muted)">en progreso</div></div>
+              </div>
+              <div style="font-size:12px;color:var(--muted)" id="monitor-url"></div>
+              <button class="btn btn-danger btn-sm" style="align-self:flex-start" onclick="closeEvaluation()">Cerrar evaluación</button>
             </div>
           </div>
         </div>
@@ -803,6 +812,49 @@ Opción 4</div>
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Eval Import modal -->
+<div id="modal-eval-import" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeEvalImport()">
+  <div class="modal" style="max-width:560px;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)">
+      <h2 style="font-size:18px;font-weight:800;margin:0">⬆️ Importar preguntas</h2>
+      <button onclick="closeEvalImport()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div style="padding:20px 24px">
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="import-tab-btn active" id="eval-tab-text" onclick="switchEvalImportTab('text',this)">Texto</button>
+        <button class="import-tab-btn" id="eval-tab-csv" onclick="switchEvalImportTab('csv',this)">CSV</button>
+      </div>
+
+      <!-- Text tab -->
+      <div id="eval-import-panel-text">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Pegá las preguntas en texto libre. Marcá la respuesta correcta con * al final de la opción.</p>
+        <pre style="font-size:11px;color:var(--muted);background:var(--surface2);padding:8px;border-radius:6px;margin-bottom:10px;white-space:pre-wrap">¿Cuál es la capital de Chile?
+A) Santiago*
+B) Valparaíso
+C) Concepción
+D) Antofagasta</pre>
+        <textarea id="eval-import-text" style="width:100%;height:200px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:13px;resize:vertical;outline:none;font-family:monospace" placeholder="Pegá tus preguntas acá..."></textarea>
+      </div>
+
+      <!-- CSV tab -->
+      <div id="eval-import-panel-csv" style="display:none">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Formato: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">pregunta, opcion_a, opcion_b, opcion_c, opcion_d, correcta</code></p>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">La columna "correcta" acepta A/B/C/D o 0/1/2/3. Las opciones C y D son opcionales.</p>
+        <textarea id="eval-import-csv" style="width:100%;height:200px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:13px;resize:vertical;outline:none;font-family:monospace" placeholder="pregunta,opcion_a,opcion_b,opcion_c,opcion_d,correcta"></textarea>
+      </div>
+
+      <div id="eval-import-preview" style="display:none;margin-top:14px">
+        <p style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px" id="eval-import-preview-count"></p>
+        <div class="import-preview-list" id="eval-import-preview-list"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;padding:16px 24px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" style="flex:1" onclick="previewEvalImport()">Vista previa</button>
+      <button class="btn btn-primary" style="flex:1" onclick="confirmEvalImport()">Agregar preguntas</button>
+    </div>
+  </div>
+</div>
 
 <!-- Stats modal -->
 <div id="modal-stats" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeStatsModal()">
@@ -2789,29 +2841,39 @@ function hideEvalEditor() {
   document.getElementById('eval-editor').classList.add('hidden');
 }
 
+const _EVAL_OPT_LETTERS = ['A','B','C','D'];
+function _buildEvalOptRow(i, value, isCorrect) {
+  const safe = (value || '').replace(/"/g, '&quot;');
+  return `<div class="opt-row opt-row-${i}${isCorrect ? ' correct' : ''}" onclick="setEvalCorrect(this)">
+    <div class="opt-letter">${_EVAL_OPT_LETTERS[i]}</div>
+    <input type="text" class="opt-input eval-opt-input" maxlength="120" placeholder="Opción ${_EVAL_OPT_LETTERS[i]}" value="${safe}" onclick="event.stopPropagation()"/>
+    <div class="opt-check">✓</div>
+    <button type="button" class="opt-remove" onclick="event.stopPropagation();removeEvalOption(this)" title="Eliminar opción">×</button>
+  </div>`;
+}
+
 function addEvalQuestion(data) {
   const idx = _evalQCounter++;
   const div = document.createElement('div');
   div.className = 'card';
   div.style.marginBottom = '12px';
   div.dataset.qidx = idx;
-  const optsHtml = (data?.options || ['','','']).map((opt, i) => `
-    <div class="opt-row opt-row-${i}${data && i === data.correctIndex ? ' correct' : ''}" onclick="setEvalCorrect(this)" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:6px">
-      <div style="width:28px;height:28px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0">${['A','B','C','D'][i]}</div>
-      <input type="text" class="eval-opt-input" maxlength="120" placeholder="Opción ${['A','B','C','D'][i]}" value="${(opt||'').replace(/"/g,'&quot;')}" onclick="event.stopPropagation()" style="flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none"/>
-      <div class="opt-check" style="color:var(--success);font-weight:700;display:${data && i === data.correctIndex ? 'block' : 'none'}">✓</div>
-    </div>
-  `).join('');
+
+  let initOpts = data?.options ? data.options.map(o => o ?? '') : ['', '', '', ''];
+  initOpts = initOpts.slice(0, 4);
+  while (initOpts.length < 4) initOpts.push('');
+
+  const optsHtml = initOpts.map((opt, i) => _buildEvalOptRow(i, opt, data && i === data.correctIndex)).join('');
+
   div.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="font-size:13px;font-weight:700;color:var(--muted)">Pregunta ${idx + 1}</span>
+      <span class="eval-q-num" style="font-size:13px;font-weight:700;color:var(--muted)">Pregunta ${idx + 1}</span>
       <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.card').remove();renumberEvalQs()">Eliminar</button>
     </div>
     <textarea class="eval-q-text" maxlength="180" placeholder="Escribe la pregunta..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:15px;min-height:70px;resize:vertical;outline:none;font-family:inherit">${_esc(data?.text || '')}</textarea>
-    <div style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:10px">Hacé click en la opción correcta para marcarla</div>
-    <div class="eval-opts-list">${optsHtml}</div>
-    <input type="hidden" class="eval-correct" value="${data ? data.correctIndex : -1}"/>
-    <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+    <div class="opt-rows" style="margin-top:10px">${optsHtml}</div>
+    <input type="hidden" class="eval-correct" value="${data ? (data.correctIndex ?? -1) : -1}"/>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
       <span style="font-size:12px;color:var(--muted)">🏷️</span>
       <input type="text" class="eval-tag" maxlength="30" placeholder="Etiqueta (opcional)" value="${_esc(data?.tag || '')}" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none"/>
     </div>
@@ -2821,16 +2883,31 @@ function addEvalQuestion(data) {
 
 function setEvalCorrect(row) {
   const card = row.closest('.card');
-  card.querySelectorAll('.opt-row').forEach((r) => {
+  card.querySelectorAll('.opt-row').forEach((r, i) => {
     r.classList.remove('correct');
-    const check = r.querySelector('.opt-check');
-    if (check) check.style.display = 'none';
+    card.querySelector('.eval-correct').value = -1;
   });
   row.classList.add('correct');
-  const check = row.querySelector('.opt-check');
-  if (check) check.style.display = 'block';
   const idx = [...card.querySelectorAll('.opt-row')].indexOf(row);
   card.querySelector('.eval-correct').value = idx;
+}
+
+function removeEvalOption(btn) {
+  const row = btn.closest('.opt-row');
+  const card = row.closest('.card');
+  const rows = card.querySelectorAll('.opt-row');
+  if (rows.length <= 2) return;
+  row.remove();
+  // Re-index remaining rows
+  card.querySelectorAll('.opt-row').forEach((r, i) => {
+    r.className = `opt-row opt-row-${i}${r.classList.contains('correct') ? ' correct' : ''}`;
+    const letter = r.querySelector('.opt-letter');
+    if (letter) letter.textContent = _EVAL_OPT_LETTERS[i];
+    const inp = r.querySelector('.eval-opt-input');
+    if (inp) inp.placeholder = `Opción ${_EVAL_OPT_LETTERS[i]}`;
+  });
+  card.querySelector('.eval-correct').value = -1;
+  card.querySelectorAll('.opt-row').forEach(r => r.classList.remove('correct'));
 }
 
 function renumberEvalQs() {
@@ -2911,6 +2988,13 @@ async function watchEval(id) {
   document.getElementById('eval-monitor').classList.remove('hidden');
   document.getElementById('monitor-title').textContent = ev.title;
   document.getElementById('monitor-code').textContent = ev.code || '';
+
+  // Generate QR for student join URL
+  const evalUrl = `${window.location.origin}/eval/?code=${ev.code}`;
+  document.getElementById('monitor-url').textContent = evalUrl;
+  try {
+    QRCode.toCanvas(document.getElementById('monitor-qr'), evalUrl, { width: 140, margin: 1, color: { dark: '#1a1a2e', light: '#ffffff' } });
+  } catch(e) {}
 
   if (_monitorSocket) _monitorSocket.disconnect();
   _monitorSocket = io(SYNAPTO_CONFIG.backendUrl);
@@ -3043,6 +3127,89 @@ async function exportEvalCsv() {
   const id = document.getElementById('results-title').dataset.evalId;
   if (!id) return;
   window.open(`${API}/evaluations/${id}/results/csv?token=${encodeURIComponent(_token)}`, '_blank');
+}
+
+// ── Eval Import ───────────────────────────────────────────────────────────────
+let _evalImportTab = 'text';
+let _evalImportParsed = [];
+
+function openEvalImport() {
+  document.getElementById('eval-import-text').value = '';
+  document.getElementById('eval-import-csv').value = '';
+  document.getElementById('eval-import-preview').style.display = 'none';
+  _evalImportParsed = [];
+  switchEvalImportTab('text', document.getElementById('eval-tab-text'));
+  document.getElementById('modal-eval-import').style.display = 'flex';
+}
+
+function closeEvalImport() {
+  document.getElementById('modal-eval-import').style.display = 'none';
+}
+
+function switchEvalImportTab(name, btn) {
+  _evalImportTab = name;
+  document.querySelectorAll('.import-tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('eval-import-panel-text').style.display = name === 'text' ? 'block' : 'none';
+  document.getElementById('eval-import-panel-csv').style.display = name === 'csv' ? 'block' : 'none';
+}
+
+function previewEvalImport() {
+  const raw = _evalImportTab === 'text'
+    ? document.getElementById('eval-import-text').value
+    : document.getElementById('eval-import-csv').value;
+
+  _evalImportParsed = _evalImportTab === 'text' ? _parseSmartText(raw) : _parseEvalCSV(raw);
+
+  const previewEl = document.getElementById('eval-import-preview');
+  const countEl = document.getElementById('eval-import-preview-count');
+  const listEl = document.getElementById('eval-import-preview-list');
+
+  if (!_evalImportParsed.length) {
+    countEl.textContent = 'No se detectaron preguntas válidas.';
+    listEl.innerHTML = '';
+    previewEl.style.display = 'block';
+    return;
+  }
+
+  countEl.textContent = `${_evalImportParsed.length} pregunta${_evalImportParsed.length !== 1 ? 's' : ''} detectada${_evalImportParsed.length !== 1 ? 's' : ''}`;
+  listEl.innerHTML = _evalImportParsed.map((q, i) => {
+    const warn = q.correctIndex < 0;
+    const correctOpt = q.options[q.correctIndex];
+    return `<div class="import-preview-row ${warn ? 'warn' : ''}">
+      <span class="ipq-num">${i + 1}</span>
+      <span class="ipq-text" title="${_esc(q.text)}">${_esc(q.text)}</span>
+      ${correctOpt
+        ? `<span class="ipq-correct">✓ ${correctOpt.length > 22 ? correctOpt.slice(0, 22) + '…' : _esc(correctOpt)}</span>`
+        : `<span class="ipq-nowarn">⚠️ sin correcta</span>`}
+    </div>`;
+  }).join('');
+  previewEl.style.display = 'block';
+}
+
+function confirmEvalImport() {
+  if (!_evalImportParsed.length) { previewEvalImport(); return; }
+  _evalImportParsed.forEach(q => addEvalQuestion(q));
+  closeEvalImport();
+  toast(`${_evalImportParsed.length} preguntas importadas`);
+}
+
+function _parseEvalCSV(raw) {
+  const lines = raw.trim().split('\n').filter(l => l.trim());
+  const questions = [];
+  const headerRe = /^pregunta/i;
+  lines.forEach(line => {
+    if (headerRe.test(line.trim())) return;
+    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, '').trim());
+    if (cols.length < 3) return;
+    const [text, a, b, c, d, correcta] = cols;
+    if (!text || !a || !b) return;
+    const options = [a, b, c, d].filter(Boolean);
+    const map = { A: 0, B: 1, C: 2, D: 3, '0': 0, '1': 1, '2': 2, '3': 3 };
+    const correctIndex = map[String(correcta).trim().toUpperCase()] ?? -1;
+    questions.push({ text, options, correctIndex });
+  });
+  return questions;
 }
 
 function spawnAdminReaction(emoji, playerName) {
