@@ -139,6 +139,16 @@
   </div>
 </div>
 
+<!-- LOCKED MODAL -->
+<div id="modal-locked" class="modal-overlay hidden" style="z-index:9999;background:rgba(0,0,0,.92)">
+  <div class="modal-box" style="text-align:center;border:2px solid var(--danger)">
+    <div style="font-size:52px;margin-bottom:12px">🚫</div>
+    <h3 style="font-size:20px;font-weight:800;margin-bottom:10px;color:var(--danger)">Evaluación bloqueada</h3>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:6px">Saliste de la pantalla durante la evaluación.</p>
+    <p style="font-size:13px;color:var(--muted)">Tus respuestas fueron enviadas automáticamente.</p>
+  </div>
+</div>
+
 <!-- CONFIRM MODAL -->
 <div id="modal-confirm" class="modal-overlay hidden">
   <div class="modal-box">
@@ -184,6 +194,34 @@ let _timerInterval = null;
 let _timeLeft = 0;
 let _submitted = false;
 let _optionMaps = [];
+let _evalInProgress = false;
+let _lockTriggered = false;
+
+function _isEvalActive() {
+  return _evalInProgress && !_submitted && !_lockTriggered;
+}
+
+function _lockAndSubmit() {
+  if (!_isEvalActive()) return;
+  _lockTriggered = true;
+  clearInterval(_timerInterval);
+  document.getElementById('modal-confirm').classList.add('hidden');
+  document.getElementById('modal-locked').classList.remove('hidden');
+  if (socket) {
+    const answersArr = Object.entries(_answers).map(([questionId, answerIndex]) => ({ questionId, answerIndex }));
+    socket.emit('eval:submit', { answers: answersArr });
+    _submitted = true;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) _lockAndSubmit();
+});
+
+window.addEventListener('blur', () => {
+  // Small delay to avoid false positives on page load focus events
+  setTimeout(() => { if (!document.hasFocus()) _lockAndSubmit(); }, 200);
+});
 
 const urlCode = new URLSearchParams(window.location.search).get('code');
 if (urlCode) document.getElementById('inp-code').value = urlCode.toUpperCase();
@@ -222,6 +260,8 @@ function joinEval() {
 
     document.getElementById('eval-title').textContent = title;
     startTimer();
+    _evalInProgress = true;
+    _lockTriggered = false;
     renderNav();
     renderQuestion(0);
     showScreen('s-eval');
@@ -236,6 +276,7 @@ function joinEval() {
       document.getElementById('result-grade').textContent = 'Nota: ' + grade.toFixed(1);
       document.getElementById('result-grade').style.display = 'block';
     }
+    _evalInProgress = false;
     showScreen('s-result');
   });
 
@@ -246,6 +287,7 @@ function joinEval() {
     socket.emit('eval:submit', { answers: answersArr });
     const answered = Object.keys(_answers).length;
     document.getElementById('timeout-score').textContent = `Respondiste ${answered} de ${_questions.length} preguntas.`;
+    _evalInProgress = false;
     showScreen('s-timeout');
   });
 
@@ -273,7 +315,8 @@ function startTimer() {
         socket.emit('eval:submit', { answers: answersArr });
         const answered = Object.keys(_answers).length;
         document.getElementById('timeout-score').textContent = `Respondiste ${answered} de ${_questions.length} preguntas.`;
-        showScreen('s-timeout');
+        _evalInProgress = false;
+    showScreen('s-timeout');
       }
     }
   }, 1000);
