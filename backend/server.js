@@ -536,7 +536,7 @@ app.patch('/api/evaluations/:id/status', requireAuth, (req, res) => {
   const { status } = req.body;
   if (!['draft','open','closed'].includes(status)) return res.status(400).json({ error: 'Estado inválido' });
 
-  if (status === 'open' && ev.status === 'draft') {
+  if (status === 'open' && (ev.status === 'draft' || ev.status === 'closed')) {
     let code;
     do { code = Math.random().toString(36).substring(2, 8).toUpperCase(); } while (activeEvals[code]);
     activeEvals[code] = { evalId: req.params.id, students: {} };

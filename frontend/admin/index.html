@@ -822,8 +822,12 @@ Opción 4</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="hideEvalResults()">← Volver</button>
           <h3 style="font-size:18px;font-weight:700" id="results-title"></h3>
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="exportEvalCsv()">⬇️ Exportar CSV</button>
+          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="reopenEvaluation()" id="btn-reopen-eval">↩️ Reabrir</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportEvalCsv()">⬇️ Exportar CSV</button>
+          </div>
         </div>
+        <div id="results-summary-wrap" style="margin-bottom:16px"></div>
         <div class="card" style="overflow-x:auto;margin-bottom:20px">
           <table class="eval-result-table" id="results-table"></table>
         </div>
@@ -3229,67 +3233,97 @@ async function viewEvalResults(id) {
 
     const passScore = Math.round(ev.pass_percentage / 100 * questions.length);
 
-    document.getElementById('results-table').innerHTML = `
-      <thead><tr>
-        <th>RUT</th><th>Nombre</th><th>Correctas</th><th>% Logro</th><th>Nota</th><th>Estado</th><th>Tiempo</th>
-      </tr></thead>
-      <tbody>
-        ${submissions.map(s => {
-          const pct = s.total_count > 0 ? Math.round(s.correct_count / s.total_count * 100) : 0;
-          const passed = s.correct_count >= passScore;
-          const mins = Math.round((s.time_used || 0) / 60);
-          return `<tr>
-            <td style="font-family:monospace;font-size:13px">${_esc(s.student_rut)}</td>
-            <td style="font-weight:600">${_esc(s.student_name)}</td>
-            <td style="text-align:center">${s.correct_count} / ${s.total_count}</td>
-            <td style="text-align:center;font-weight:700">${pct}%</td>
-            <td style="text-align:center;font-weight:800;font-size:16px;color:${passed ? 'var(--success)' : 'var(--danger)'}">${s.grade != null ? s.grade.toFixed(1) : '-'}</td>
-            <td><span class="pass-badge ${passed ? 'pass-yes' : 'pass-no'}">${passed ? 'Aprobado' : 'Reprobado'}</span></td>
-            <td style="font-size:13px;color:var(--muted)">${mins} min</td>
-          </tr>`;
+    // ── Summary stats ──
+    const totalSubs = submissions.length;
+    const passedSubs = submissions.filter(s => s.correct_count >= passScore).length;
+    const avgGrade = totalSubs > 0 ? (submissions.reduce((a,s) => a + (s.grade || 0), 0) / totalSubs).toFixed(1) : '-';
+    const avgTime = totalSubs > 0 ? Math.round(submissions.reduce((a,s) => a + (s.time_used || 0), 0) / totalSubs / 60) : '-';
+    const passRate = totalSubs > 0 ? Math.round(passedSubs / totalSubs * 100) : '-';
+
+    document.getElementById('results-summary-wrap').innerHTML = `
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div class="eval-stat-chip"><span>${totalSubs}</span><span>Enviaron</span></div>
+        <div class="eval-stat-chip"><span style="color:var(--accent2)">${avgGrade}</span><span>Nota promedio</span></div>
+        <div class="eval-stat-chip"><span style="color:${passRate !== '-' && passRate >= 60 ? 'var(--success)' : 'var(--danger)'}">${passRate !== '-' ? passRate + '%' : '-'}</span><span>Aprobación</span></div>
+        <div class="eval-stat-chip"><span>${avgTime !== '-' ? avgTime + ' min' : '-'}</span><span>Tiempo promedio</span></div>
+      </div>`;
+
+    if (totalSubs === 0) {
+      document.getElementById('results-table').innerHTML = `
+        <tbody><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">
+          Aún no hay entregas para esta evaluación.
+        </td></tr></tbody>`;
+    } else {
+      document.getElementById('results-table').innerHTML = `
+        <thead><tr>
+          <th>RUT</th><th>Nombre</th><th>Correctas</th><th>% Logro</th><th>Nota</th><th>Estado</th><th>Tiempo</th>
+        </tr></thead>
+        <tbody>
+          ${submissions.map(s => {
+            const pct = s.total_count > 0 ? Math.round(s.correct_count / s.total_count * 100) : 0;
+            const passed = s.correct_count >= passScore;
+            const mins = Math.round((s.time_used || 0) / 60);
+            return `<tr>
+              <td style="font-family:monospace;font-size:13px">${_esc(s.student_rut)}</td>
+              <td style="font-weight:600">${_esc(s.student_name)}</td>
+              <td style="text-align:center">${s.correct_count} / ${s.total_count}</td>
+              <td style="text-align:center;font-weight:700">${pct}%</td>
+              <td style="text-align:center;font-weight:800;font-size:16px;color:${passed ? 'var(--success)' : 'var(--danger)'}">${s.grade != null ? s.grade.toFixed(1) : '-'}</td>
+              <td><span class="pass-badge ${passed ? 'pass-yes' : 'pass-no'}">${passed ? 'Aprobado' : 'Reprobado'}</span></td>
+              <td style="font-size:13px;color:var(--muted)">${mins} min</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      `;
+    }
+
+    if (totalSubs === 0) {
+      document.getElementById('results-stats').innerHTML = '';
+    } else {
+      const qStats = questions.map((q) => {
+        const tallyMap = {};
+        submissions.forEach(s => {
+          const ans = s.answers.find(a => a.questionId === q.id);
+          if (ans !== undefined && ans.answerIndex !== undefined) {
+            tallyMap[ans.answerIndex] = (tallyMap[ans.answerIndex] || 0) + 1;
+          }
+        });
+        const total = Object.values(tallyMap).reduce((a,b) => a+b, 0);
+        const correctCount = tallyMap[q.correct_index] || 0;
+        const wrongPct = total > 0 ? Math.round((1 - correctCount/total) * 100) : null;
+        return { q, tallyMap, total, correctCount, wrongPct };
+      }).sort((a,b) => (b.wrongPct ?? -1) - (a.wrongPct ?? -1));
+
+      document.getElementById('results-stats').innerHTML = `
+        <h4 style="font-size:15px;font-weight:700;margin-bottom:12px">Preguntas por dificultad</h4>
+        ${qStats.map(({ q, tallyMap, total, correctCount, wrongPct }, i) => {
+          const opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+          const badgeTxt = wrongPct === null ? 'Sin datos' : (wrongPct > 50 ? `❌ ${wrongPct}% incorrecto` : `✅ ${100-wrongPct}% correcto`);
+          const badgeColor = wrongPct === null ? 'var(--muted)' : wrongPct > 50 ? 'var(--danger)' : 'var(--success)';
+          return `<div class="card" style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
+              <div style="font-size:14px;font-weight:600;flex:1">${i+1}. ${_esc(q.text)}</div>
+              <div style="font-size:13px;font-weight:800;color:${badgeColor};white-space:nowrap">${badgeTxt}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              ${opts.map((opt, j) => {
+                const count = tallyMap[j] || 0;
+                const pct = total > 0 ? Math.round(count/total*100) : 0;
+                const isCorrect = j === q.correct_index;
+                return `<div style="display:flex;align-items:center;gap:8px;font-size:13px">
+                  <span style="min-width:20px;font-weight:700;color:${isCorrect?'var(--success)':''}">${['A','B','C','D'][j]}</span>
+                  <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
+                    <div style="height:100%;background:${isCorrect?'#4CAF50':['#E63946','#2196F3','#FF9800','#9C27B0'][j]};border-radius:4px;width:${pct}%;transition:width .5s"></div>
+                  </div>
+                  <span style="min-width:32px;text-align:right;color:var(--muted)">${count}</span>
+                  ${isCorrect ? '<span style="color:var(--success);font-size:11px">✓</span>' : ''}
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
         }).join('')}
-      </tbody>
-    `;
-
-    const qStats = questions.map((q, qi) => {
-      const tallyMap = {};
-      submissions.forEach(s => {
-        const ans = s.answers.find(a => a.questionId === q.id);
-        if (ans) tallyMap[ans.answerIndex] = (tallyMap[ans.answerIndex] || 0) + 1;
-      });
-      const total = Object.values(tallyMap).reduce((a,b) => a+b, 0) || 1;
-      const correctCount = tallyMap[q.correct_index] || 0;
-      const wrongPct = Math.round((1 - correctCount/total) * 100);
-      return { q, tallyMap, total, correctCount, wrongPct };
-    }).sort((a,b) => b.wrongPct - a.wrongPct);
-
-    document.getElementById('results-stats').innerHTML = `
-      <h4 style="font-size:15px;font-weight:700;margin-bottom:12px">Preguntas por dificultad</h4>
-      ${qStats.map(({ q, tallyMap, total, correctCount, wrongPct }, i) => {
-        const opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-        return `<div class="card" style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
-            <div style="font-size:14px;font-weight:600;flex:1">${i+1}. ${_esc(q.text)}</div>
-            <div style="font-size:13px;font-weight:800;color:${wrongPct>50?'var(--danger)':'var(--success)'}">❌ ${wrongPct}%</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:5px">
-            ${opts.map((opt, j) => {
-              const count = tallyMap[j] || 0;
-              const pct = Math.round(count/total*100);
-              const isCorrect = j === q.correct_index;
-              return `<div style="display:flex;align-items:center;gap:8px;font-size:13px">
-                <span style="min-width:20px;font-weight:700;color:${isCorrect?'var(--success)':''}">${['A','B','C','D'][j]}</span>
-                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
-                  <div style="height:100%;background:${isCorrect?'#4CAF50':['#E63946','#2196F3','#FF9800','#4CAF50'][j]};border-radius:4px;width:${pct}%;transition:width .5s"></div>
-                </div>
-                <span style="min-width:32px;text-align:right;color:var(--muted)">${count}</span>
-                ${isCorrect ? '<span style="color:var(--success);font-size:11px">✓</span>' : ''}
-              </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-      }).join('')}
-    `;
+      `;
+    }
   } catch(e) { toast('Error cargando resultados', true); }
 }
 
@@ -3298,6 +3332,22 @@ function hideEvalResults() {
   document.getElementById('eval-stats-header').classList.remove('hidden');
   document.getElementById('eval-filter-bar').classList.remove('hidden');
   document.getElementById('eval-results').classList.add('hidden');
+  document.getElementById('results-summary-wrap').innerHTML = '';
+}
+
+async function reopenEvaluation() {
+  const id = document.getElementById('results-title').dataset.evalId;
+  if (!id) return;
+  if (!confirm('¿Reabrir esta evaluación? Los alumnos podrán volver a unirse con el mismo código.')) return;
+  try {
+    const res = await authFetch(`${API}/evaluations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'open' }) });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Error al reabrir', true); return; }
+    toast('Evaluación reabierta · Código: ' + (data.code || ''));
+    hideEvalResults();
+    await loadEvals();
+    watchEval(id);
+  } catch { toast('Error al reabrir', true); }
 }
 
 async function exportEvalCsv() {
