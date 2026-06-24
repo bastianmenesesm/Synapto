@@ -478,11 +478,11 @@ app.get('/api/evaluations', requireAuth, (req, res) => {
 });
 
 app.post('/api/evaluations', requireAuth, (req, res) => {
-  const { title, timeLimit, gradeMin, gradeMax, passPercentage, questions } = req.body;
+  const { title, timeLimit, gradeMin, gradeMax, passPercentage, questions, tags } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Título requerido' });
   if (!Array.isArray(questions) || questions.length === 0) return res.status(400).json({ error: 'Se requiere al menos una pregunta' });
   const id = uuidv4();
-  db.prepare('INSERT INTO evaluations (id, user_id, title, time_limit, grade_min, grade_max, pass_percentage) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, req.user.id, title.trim(), timeLimit || 90, gradeMin ?? 1.0, gradeMax ?? 7.0, passPercentage ?? 60);
+  db.prepare('INSERT INTO evaluations (id, user_id, title, time_limit, grade_min, grade_max, pass_percentage, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, req.user.id, title.trim(), timeLimit || 90, gradeMin ?? 1.0, gradeMax ?? 7.0, passPercentage ?? 60, tags?.trim() || null);
   const insertQ = db.prepare('INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)');
   questions.forEach((q, i) => insertQ.run(uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), i, q.tag?.trim() || null));
   res.json({ id });
@@ -500,8 +500,8 @@ app.put('/api/evaluations/:id', requireAuth, (req, res) => {
   const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
   if (ev.status !== 'draft') return res.status(400).json({ error: 'Solo se puede editar en borrador' });
-  const { title, timeLimit, gradeMin, gradeMax, passPercentage, questions } = req.body;
-  db.prepare('UPDATE evaluations SET title=?, time_limit=?, grade_min=?, grade_max=?, pass_percentage=? WHERE id=?').run(title?.trim() || ev.title, timeLimit || ev.time_limit, gradeMin ?? ev.grade_min, gradeMax ?? ev.grade_max, passPercentage ?? ev.pass_percentage, req.params.id);
+  const { title, timeLimit, gradeMin, gradeMax, passPercentage, questions, tags } = req.body;
+  db.prepare('UPDATE evaluations SET title=?, time_limit=?, grade_min=?, grade_max=?, pass_percentage=?, tags=? WHERE id=?').run(title?.trim() || ev.title, timeLimit || ev.time_limit, gradeMin ?? ev.grade_min, gradeMax ?? ev.grade_max, passPercentage ?? ev.pass_percentage, tags !== undefined ? (tags?.trim() || null) : ev.tags, req.params.id);
   if (Array.isArray(questions)) {
     db.prepare('DELETE FROM evaluation_questions WHERE evaluation_id = ?').run(req.params.id);
     const insertQ = db.prepare('INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -517,6 +517,17 @@ app.delete('/api/evaluations/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM evaluation_submissions WHERE evaluation_id = ?').run(req.params.id);
   db.prepare('DELETE FROM evaluations WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+app.post('/api/evaluations/:id/duplicate', requireAuth, (req, res) => {
+  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!ev) return res.status(404).json({ error: 'No encontrada' });
+  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  const newId = uuidv4();
+  db.prepare('INSERT INTO evaluations (id, user_id, title, time_limit, grade_min, grade_max, pass_percentage, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(newId, req.user.id, `${ev.title} (copia)`, ev.time_limit, ev.grade_min, ev.grade_max, ev.pass_percentage, ev.tags);
+  const insertQ = db.prepare('INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  questions.forEach(q => insertQ.run(uuidv4(), newId, q.text, q.options, q.correct_index, q.position, q.tag));
+  res.json({ id: newId });
 });
 
 app.patch('/api/evaluations/:id/status', requireAuth, (req, res) => {

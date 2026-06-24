@@ -344,11 +344,25 @@
     .preview-dot.active { background: var(--accent2); border-color: var(--accent2); }
 
     /* Evaluations */
-    .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; border-top: 3px solid var(--accent2); }
+    .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; display: flex; gap: 0; overflow: hidden; position: relative; }
+    .eval-card-bar { width: 4px; border-radius: 4px; flex-shrink: 0; margin-right: 16px; align-self: stretch; }
+    .eval-card-bar-draft { background: var(--muted); }
+    .eval-card-bar-open { background: var(--accent2); }
+    .eval-card-bar-closed { background: var(--accent); }
+    .eval-card-body { flex: 1; min-width: 0; }
     .eval-status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: .3px; }
     .eval-status-draft { background: rgba(255,255,255,.07); color: var(--muted); }
     .eval-status-open { background: rgba(78,205,196,.15); color: var(--accent2); }
     .eval-status-closed { background: rgba(124,92,252,.15); color: var(--accent); }
+    .eval-tag-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(124,92,252,.12); color: var(--accent); font-weight: 600; }
+    .eval-stats-header { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+    .eval-stat-chip { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 20px; display: flex; flex-direction: column; gap: 2px; }
+    .eval-stat-chip span:first-child { font-size: 22px; font-weight: 900; }
+    .eval-stat-chip span:last-child { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+    .eval-filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .eval-filter-chip { font-size: 12px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; transition: all .15s; font-weight: 600; }
+    .eval-filter-chip:hover, .eval-filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .grade-preview { font-size: 12px; color: var(--accent2); margin-top: 6px; font-weight: 600; }
     .eval-student-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
     .eval-prog-bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
     .eval-prog-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width .4s; }
@@ -721,10 +735,12 @@ Opción 4</div>
 
     <!-- ═══ EVALUACIONES SECTION ══════════════════════════════════════════════════ -->
     <div id="sec-evals" class="view">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
         <h2 style="font-size:24px;font-weight:800">Evaluaciones</h2>
         <button class="btn btn-primary btn-sm" onclick="showEvalEditor()">+ Nueva evaluación</button>
       </div>
+      <div id="eval-stats-header" class="eval-stats-header"></div>
+      <div id="eval-filter-bar" class="eval-filter-bar" style="display:none"></div>
       <div id="eval-list"></div>
 
       <!-- EVAL EDITOR -->
@@ -734,9 +750,15 @@ Opción 4</div>
           <h3 style="font-size:18px;font-weight:700" id="eval-editor-title">Nueva evaluación</h3>
         </div>
         <div class="card" style="margin-bottom:16px">
-          <div class="form-group">
-            <label>Título</label>
-            <input type="text" class="inp" id="eval-title-inp" placeholder="Ej: Prueba Unidad 3" maxlength="80"/>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end">
+            <div class="form-group" style="margin:0">
+              <label>Título</label>
+              <input type="text" class="inp" id="eval-title-inp" placeholder="Ej: Prueba Unidad 3" maxlength="80"/>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label>Curso / Grupo</label>
+              <input type="text" class="inp" id="eval-tags-inp" placeholder="Ej: 3°A, Biología" maxlength="60" style="min-width:180px"/>
+            </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:14px">
             <div class="form-group">
@@ -745,17 +767,18 @@ Opción 4</div>
             </div>
             <div class="form-group">
               <label>Nota mínima</label>
-              <input type="number" id="eval-grade-min" value="1.0" min="0" max="100" step="0.1"/>
+              <input type="number" id="eval-grade-min" value="1.0" min="0" max="100" step="0.1" oninput="updateGradePreview()"/>
             </div>
             <div class="form-group">
               <label>Nota máxima</label>
-              <input type="number" id="eval-grade-max" value="7.0" min="0" max="100" step="0.1"/>
+              <input type="number" id="eval-grade-max" value="7.0" min="0" max="100" step="0.1" oninput="updateGradePreview()"/>
             </div>
             <div class="form-group">
               <label>% aprobación</label>
-              <input type="number" id="eval-pass-pct" value="60" min="1" max="100"/>
+              <input type="number" id="eval-pass-pct" value="60" min="1" max="100" oninput="updateGradePreview()"/>
             </div>
           </div>
+          <div class="grade-preview" id="grade-preview"></div>
         </div>
         <div id="eval-questions-list"></div>
         <div style="display:flex;gap:8px;margin-top:12px">
@@ -2780,39 +2803,94 @@ async function loadEvals() {
   } catch(e) { toast('Error cargando evaluaciones', true); }
 }
 
+let _evalTagFilter = null;
+
 function renderEvalList() {
+  const statsEl = document.getElementById('eval-stats-header');
+  const filterEl = document.getElementById('eval-filter-bar');
   const el = document.getElementById('eval-list');
-  if (!_evals.length) {
+
+  // Stats
+  const total = _evals.length;
+  const open = _evals.filter(e => e.status === 'open').length;
+  const closed = _evals.filter(e => e.status === 'closed').length;
+  const draft = _evals.filter(e => e.status === 'draft').length;
+  if (total > 0) {
+    statsEl.innerHTML = `
+      <div class="eval-stat-chip"><span>${total}</span><span>Total</span></div>
+      <div class="eval-stat-chip"><span style="color:var(--accent2)">${open}</span><span>Abiertas</span></div>
+      <div class="eval-stat-chip"><span style="color:var(--accent)">${closed}</span><span>Cerradas</span></div>
+      <div class="eval-stat-chip"><span style="color:var(--muted)">${draft}</span><span>Borradores</span></div>`;
+    statsEl.style.display = '';
+  } else {
+    statsEl.innerHTML = '';
+    statsEl.style.display = 'none';
+  }
+
+  // Tag filter chips
+  const allTags = [...new Set(_evals.flatMap(e => e.tags ? e.tags.split(',').map(t => t.trim()).filter(Boolean) : []))];
+  if (allTags.length > 0) {
+    filterEl.style.display = '';
+    filterEl.innerHTML = `<span style="font-size:12px;color:var(--muted);font-weight:600">Filtrar:</span>
+      <button class="eval-filter-chip${_evalTagFilter === null ? ' active' : ''}" onclick="_evalTagFilter=null;renderEvalList()">Todos</button>
+      ${allTags.map(t => `<button class="eval-filter-chip${_evalTagFilter===t?' active':''}" onclick="_evalTagFilter='${_esc(t)}';renderEvalList()">${_esc(t)}</button>`).join('')}`;
+  } else {
+    filterEl.style.display = 'none';
+  }
+
+  const filtered = _evalTagFilter
+    ? _evals.filter(e => e.tags && e.tags.split(',').map(t => t.trim()).includes(_evalTagFilter))
+    : _evals;
+
+  if (!total) {
     el.innerHTML = `<div style="text-align:center;padding:48px;color:var(--muted)">
       <div style="font-size:48px;margin-bottom:12px">📋</div>
       <p>Todavía no tenés evaluaciones. Creá una para empezar.</p>
     </div>`;
     return;
   }
-  el.innerHTML = _evals.map(ev => {
+  if (!filtered.length) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted)"><p>Sin evaluaciones para este filtro.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(ev => {
     const statusBadge = {
       draft: '<span class="eval-status-badge eval-status-draft">Borrador</span>',
       open: '<span class="eval-status-badge eval-status-open">● Abierta</span>',
       closed: '<span class="eval-status-badge eval-status-closed">Cerrada</span>',
     }[ev.status] || '';
+    const barClass = { draft: 'eval-card-bar-draft', open: 'eval-card-bar-open', closed: 'eval-card-bar-closed' }[ev.status] || '';
     const codeChip = ev.code ? `<span style="font-family:monospace;font-size:12px;background:var(--surface2);padding:2px 8px;border-radius:6px;letter-spacing:2px">${ev.code}</span>` : '';
-    return `<div class="eval-card" style="margin-bottom:14px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
-          <div style="font-size:17px;font-weight:700;margin-bottom:6px">${_esc(ev.title)}</div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            ${statusBadge}
-            ${codeChip}
-            <span style="font-size:12px;color:var(--muted)">❓ ${ev.question_count} preguntas</span>
-            <span style="font-size:12px;color:var(--muted)">⏱ ${ev.time_limit} min</span>
+    const tagChips = ev.tags ? ev.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="eval-tag-chip">🏷 ${_esc(t)}</span>`).join('') : '';
+    const gradeInfo = `<span style="font-size:12px;color:var(--muted)">Nota ${ev.grade_min}–${ev.grade_max} · aprob. ${ev.pass_percentage}%</span>`;
+    const dateStr = ev.created_at ? new Date(ev.created_at).toLocaleDateString('es-CL', {day:'2-digit',month:'short',year:'numeric'}) : '';
+    return `<div class="eval-card" style="margin-bottom:12px">
+      <div class="eval-card-bar ${barClass}"></div>
+      <div class="eval-card-body">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="min-width:0">
+            <div style="font-size:17px;font-weight:700;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(ev.title)}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              ${statusBadge}
+              ${codeChip}
+              ${tagChips}
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--muted)">❓ ${ev.question_count} preguntas</span>
+              <span style="font-size:12px;color:var(--muted)">⏱ ${ev.time_limit} min</span>
+              ${gradeInfo}
+              ${dateStr ? `<span style="font-size:12px;color:var(--muted)">${dateStr}</span>` : ''}
+            </div>
           </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${ev.status === 'draft' ? `<button class="btn btn-ghost btn-sm" onclick="editEval('${ev.id}')">✏️ Editar</button>` : ''}
-          ${ev.status === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="openEvaluation('${ev.id}')">▶ Abrir</button>` : ''}
-          ${ev.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="watchEval('${ev.id}')">📊 Monitorear</button>` : ''}
-          ${ev.status === 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="viewEvalResults('${ev.id}')">📊 Resultados</button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="deleteEval('${ev.id}')">🗑️</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+            ${ev.status === 'draft' ? `<button class="btn btn-ghost btn-sm" onclick="editEval('${ev.id}')">✏️ Editar</button>` : ''}
+            <button class="btn btn-ghost btn-sm" onclick="duplicateEval('${ev.id}')" title="Duplicar">⧉</button>
+            ${ev.status === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="openEvaluation('${ev.id}')">▶ Abrir</button>` : ''}
+            ${ev.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="watchEval('${ev.id}')">📊 Monitorear</button>` : ''}
+            ${ev.status === 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="viewEvalResults('${ev.id}')">📊 Resultados</button>` : ''}
+            <button class="btn btn-danger btn-sm" onclick="deleteEval('${ev.id}')">🗑️</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -2821,10 +2899,13 @@ function renderEvalList() {
 
 function showEvalEditor(data) {
   document.getElementById('eval-list').classList.add('hidden');
+  document.getElementById('eval-stats-header').classList.add('hidden');
+  document.getElementById('eval-filter-bar').classList.add('hidden');
   document.getElementById('eval-editor').classList.remove('hidden');
   _evalEditingId = data?.id || null;
   document.getElementById('eval-editor-title').textContent = data ? 'Editar evaluación' : 'Nueva evaluación';
   document.getElementById('eval-title-inp').value = data?.title || '';
+  document.getElementById('eval-tags-inp').value = data?.tags || '';
   document.getElementById('eval-time-inp').value = data?.time_limit || 90;
   document.getElementById('eval-grade-min').value = data?.grade_min ?? 1.0;
   document.getElementById('eval-grade-max').value = data?.grade_max ?? 7.0;
@@ -2834,11 +2915,31 @@ function showEvalEditor(data) {
   list.innerHTML = '';
   if (data?.questions) data.questions.forEach(q => addEvalQuestion(q));
   else { addEvalQuestion(); addEvalQuestion(); }
+  updateGradePreview();
 }
 
 function hideEvalEditor() {
   document.getElementById('eval-list').classList.remove('hidden');
+  document.getElementById('eval-stats-header').classList.remove('hidden');
+  document.getElementById('eval-filter-bar').classList.remove('hidden');
   document.getElementById('eval-editor').classList.add('hidden');
+}
+
+function updateGradePreview() {
+  const min = parseFloat(document.getElementById('eval-grade-min').value) || 1;
+  const max = parseFloat(document.getElementById('eval-grade-max').value) || 7;
+  const pct = parseInt(document.getElementById('eval-pass-pct').value) || 60;
+  const passGrade = (min + (pct / 100) * (max - min)).toFixed(1);
+  document.getElementById('grade-preview').textContent = `Con ${pct}% de logro → nota de aprobación: ${passGrade}`;
+}
+
+async function duplicateEval(id) {
+  try {
+    const res = await authFetch(`${API}/evaluations/${id}/duplicate`, { method: 'POST' });
+    if (!res.ok) { toast('Error al duplicar', true); return; }
+    toast('Evaluación duplicada ✓');
+    loadEvals();
+  } catch { toast('Error al duplicar', true); }
 }
 
 const _EVAL_OPT_LETTERS = ['A','B','C','D'];
@@ -2944,6 +3045,7 @@ async function saveEval() {
 
   const body = {
     title,
+    tags: document.getElementById('eval-tags-inp').value.trim() || null,
     timeLimit: parseInt(document.getElementById('eval-time-inp').value) || 90,
     gradeMin: parseFloat(document.getElementById('eval-grade-min').value) || 1.0,
     gradeMax: parseFloat(document.getElementById('eval-grade-max').value) || 7.0,
@@ -2985,6 +3087,8 @@ async function watchEval(id) {
   _monitorCode = ev.code;
 
   document.getElementById('eval-list').classList.add('hidden');
+  document.getElementById('eval-stats-header').classList.add('hidden');
+  document.getElementById('eval-filter-bar').classList.add('hidden');
   document.getElementById('eval-monitor').classList.remove('hidden');
   document.getElementById('monitor-title').textContent = ev.title;
   document.getElementById('monitor-code').textContent = ev.code || '';
@@ -3095,6 +3199,8 @@ async function toggleStudentDetail(submissionId, detailId, btn) {
 function hideEvalMonitor() {
   if (_monitorSocket) { _monitorSocket.disconnect(); _monitorSocket = null; }
   document.getElementById('eval-list').classList.remove('hidden');
+  document.getElementById('eval-stats-header').classList.remove('hidden');
+  document.getElementById('eval-filter-bar').classList.remove('hidden');
   document.getElementById('eval-monitor').classList.add('hidden');
 }
 
@@ -3115,6 +3221,8 @@ async function viewEvalResults(id) {
     const { evaluation: ev, submissions, questions } = data;
 
     document.getElementById('eval-list').classList.add('hidden');
+    document.getElementById('eval-stats-header').classList.add('hidden');
+    document.getElementById('eval-filter-bar').classList.add('hidden');
     document.getElementById('eval-results').classList.remove('hidden');
     document.getElementById('results-title').textContent = ev.title;
     document.getElementById('results-title').dataset.evalId = id;
@@ -3187,6 +3295,8 @@ async function viewEvalResults(id) {
 
 function hideEvalResults() {
   document.getElementById('eval-list').classList.remove('hidden');
+  document.getElementById('eval-stats-header').classList.remove('hidden');
+  document.getElementById('eval-filter-bar').classList.remove('hidden');
   document.getElementById('eval-results').classList.add('hidden');
 }
 

@@ -66,4 +66,6 @@ db.exec(`
   );
 `);
 
+try { db.prepare('ALTER TABLE evaluations ADD COLUMN tags TEXT DEFAULT NULL').run(); } catch {}
+
 module.exports = db;
