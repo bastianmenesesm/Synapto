@@ -2899,8 +2899,8 @@ function renderEvalList() {
 
 function showEvalEditor(data) {
   document.getElementById('eval-list').classList.add('hidden');
-  document.getElementById('eval-stats-header').classList.add('hidden');
-  document.getElementById('eval-filter-bar').classList.add('hidden');
+  document.getElementById('eval-stats-header').style.display = 'none';
+  document.getElementById('eval-filter-bar').style.display = 'none';
   document.getElementById('eval-editor').classList.remove('hidden');
   _evalEditingId = data?.id || null;
   document.getElementById('eval-editor-title').textContent = data ? 'Editar evaluación' : 'Nueva evaluación';
@@ -2920,9 +2920,9 @@ function showEvalEditor(data) {
 
 function hideEvalEditor() {
   document.getElementById('eval-list').classList.remove('hidden');
-  document.getElementById('eval-stats-header').classList.remove('hidden');
-  document.getElementById('eval-filter-bar').classList.remove('hidden');
   document.getElementById('eval-editor').classList.add('hidden');
+  // renderEvalList controls stats/filter bar visibility based on data
+  renderEvalList();
 }
 
 function updateGradePreview() {
