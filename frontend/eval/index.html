@@ -322,12 +322,13 @@ function selectAnswer(optIdx) {
   const q = _questions[currentQ];
   const wasAnswered = _answers[q.id] !== undefined;
   _answers[q.id] = optIdx;
+  const advanceFrom = currentQ;
 
   if (socket) socket.emit('eval:answer', { questionId: q.id, answerIndex: optIdx });
 
   renderQuestion(currentQ);
-  if (!wasAnswered && currentQ < _questions.length - 1) {
-    setTimeout(() => goQuestion(currentQ + 1), 300);
+  if (!wasAnswered && advanceFrom < _questions.length - 1) {
+    setTimeout(() => { if (currentQ === advanceFrom) goQuestion(advanceFrom + 1); }, 300);
   }
 }
 
@@ -353,6 +354,16 @@ function doSubmit() {
   clearInterval(_timerInterval);
   const answersArr = Object.entries(_answers).map(([questionId, answerIndex]) => ({ questionId, answerIndex }));
   socket.emit('eval:submit', { answers: answersArr });
+
+  // Fallback: if server doesn't respond in 8s, re-enable submit
+  setTimeout(() => {
+    if (_submitted && document.getElementById('s-eval') && !document.getElementById('s-eval').classList.contains('hidden')) {
+      _submitted = false;
+      startTimer();
+      const btn = document.querySelector('.btn-submit-eval');
+      if (btn) btn.disabled = false;
+    }
+  }, 8000);
 }
 </script>
 </body>

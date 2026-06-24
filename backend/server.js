@@ -1050,6 +1050,7 @@ io.on('connection', (socket) => {
     const grade = parseFloat((ev.grade_min + pct * (ev.grade_max - ev.grade_min)).toFixed(1));
     const timeUsed = Math.round((Date.now() - student.joinedAt) / 1000);
     const questionOrder = answersArr.map(a => a.questionId);
+    const submissionId = uuidv4();
 
     db.prepare('INSERT INTO evaluation_submissions (id, evaluation_id, student_name, student_rut, answers, question_order, correct_count, total_count, grade, time_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
       submissionId, session.evalId, student.name, student.rut,
@@ -1057,7 +1058,6 @@ io.on('connection', (socket) => {
       correctCount, totalCount, grade, timeUsed
     );
 
-    const submissionId = uuidv4();
     student.submitted = true;
     student.answered = Object.keys(student.answers).length;
     student.correctCount = correctCount;
