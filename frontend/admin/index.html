@@ -3053,7 +3053,7 @@ async function toggleStudentDetail(submissionId, detailId, btn) {
   btn.textContent = 'Cargando…';
   btn.disabled = true;
   try {
-    const res = await apiFetch(`/api/evaluations/${_monitorEvalId}/submissions/${submissionId}`);
+    const res = await authFetch(`${API}/evaluations/${_monitorEvalId}/submissions/${submissionId}`);
     const { sub, questions } = await res.json();
     const letters = ['A','B','C','D'];
     const optColors = ['#E63946','#2196F3','#FF9800','#4CAF50'];
