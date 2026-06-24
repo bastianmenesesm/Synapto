@@ -3236,6 +3236,7 @@ function renderMonitorStudents(students) {
         </div>
         <span style="color:var(--accent2);font-size:12px;font-weight:700;white-space:nowrap">✓ Enviado</span>
         ${s.submissionId ? `<button class="btn btn-ghost btn-sm" onclick="toggleStudentDetail('${s.submissionId}','${detailId}',this)" style="padding:4px 10px;font-size:12px">Ver detalle ▼</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="resetStudent('${_esc(s.rut)}','${_esc(s.name)}')" style="padding:4px 10px;font-size:12px;color:var(--danger);border-color:var(--danger)" title="Permitir reintentar">↩ Reintentar</button>
       ` : `
         <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:180px">
           <div class="eval-prog-bar" style="flex:1"><div class="eval-prog-fill" style="width:${pct}%"></div></div>
@@ -3247,6 +3248,19 @@ function renderMonitorStudents(students) {
       <div id="${detailId}" style="display:none;width:100%;margin-top:4px"></div>
     </div>`;
   }).join('');
+}
+
+async function resetStudent(rut, name) {
+  if (!_monitorEvalId) return;
+  if (!confirm(`¿Permitir que ${name} vuelva a intentar? Se eliminará su entrega actual.`)) return;
+  try {
+    const res = await authFetch(`${API}/evaluations/${_monitorEvalId}/reset-student`, {
+      method: 'POST',
+      body: JSON.stringify({ rut })
+    });
+    if (!res.ok) { const e = await res.json(); toast(e.error || 'Error', true); return; }
+    toast(`${name} puede volver a ingresar ✓`);
+  } catch { toast('Error al reiniciar alumno', true); }
 }
 
 async function toggleStudentDetail(submissionId, detailId, btn) {

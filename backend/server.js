@@ -518,6 +518,22 @@ app.delete('/api/evaluations/:id/submissions', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/evaluations/:id/reset-student', requireAuth, (req, res) => {
+  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!ev) return res.status(404).json({ error: 'No encontrada' });
+  const { rut } = req.body;
+  if (!rut) return res.status(400).json({ error: 'RUT requerido' });
+  // Delete submission so student can rejoin
+  db.prepare('DELETE FROM evaluation_submissions WHERE evaluation_id = ? AND student_rut = ?').run(req.params.id, rut);
+  // Remove from active session in memory so server lets them back in
+  const session = Object.values(activeEvals).find(s => s.evalId === req.params.id);
+  if (session) {
+    const socketId = Object.keys(session.students).find(sid => session.students[sid].rut === rut);
+    if (socketId) delete session.students[socketId];
+  }
+  res.json({ ok: true });
+});
+
 app.delete('/api/evaluations/:id', requireAuth, (req, res) => {
   const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
