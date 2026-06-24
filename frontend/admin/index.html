@@ -373,6 +373,19 @@
     .pass-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
     .pass-yes { background: rgba(76,175,80,.15); color: #4CAF50; }
     .pass-no { background: rgba(230,57,70,.15); color: #E63946; }
+    .sort-th { cursor:pointer; user-select:none; }
+    .sort-th:hover { color:var(--text); }
+    .sort-th::after { content:' ↕'; font-size:10px; opacity:.4; }
+    .sort-th.asc::after { content:' ↑'; opacity:1; }
+    .sort-th.desc::after { content:' ↓'; opacity:1; }
+    .eval-q-card { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden; }
+    .eval-q-header { display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;transition:background .15s; }
+    .eval-q-header:hover { background:var(--surface2); }
+    .eval-q-body { padding:0 16px 16px; }
+    .eval-q-collapsed .eval-q-body { display:none; }
+    .eval-sticky-bar { position:sticky;top:0;z-index:20;background:var(--bg);padding:12px 0;margin-bottom:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border); }
+    .time-warn-badge { font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,152,0,.15);color:#FF9800; }
+    .time-danger-badge { font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(230,57,70,.15);color:var(--danger); }
   </style>
 </head>
 <body>
@@ -745,9 +758,14 @@ Opción 4</div>
 
       <!-- EVAL EDITOR -->
       <div id="eval-editor" class="hidden">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div class="eval-sticky-bar">
           <button class="btn btn-ghost btn-sm" onclick="hideEvalEditor()">← Volver</button>
           <h3 style="font-size:18px;font-weight:700" id="eval-editor-title">Nueva evaluación</h3>
+          <span id="eval-q-count" style="font-size:13px;color:var(--muted)"></span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="addEvalQuestion()">+ Pregunta</button>
+            <button class="btn btn-primary btn-sm" onclick="saveEval()">Guardar</button>
+          </div>
         </div>
         <div class="card" style="margin-bottom:16px">
           <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end">
@@ -810,11 +828,24 @@ Opción 4</div>
                 <div><span style="font-size:28px;font-weight:900" id="monitor-active">0</span><div style="font-size:12px;color:var(--muted)">en progreso</div></div>
               </div>
               <div style="font-size:12px;color:var(--muted)" id="monitor-url"></div>
-              <button class="btn btn-danger btn-sm" style="align-self:flex-start" onclick="closeEvaluation()">Cerrar evaluación</button>
+              <div style="display:flex;gap:16px;align-items:flex-end">
+                <div><span style="font-size:22px;font-weight:900" id="monitor-timelimit">--</span><div style="font-size:11px;color:var(--muted)">min límite</div></div>
+                <button class="btn btn-danger btn-sm" onclick="closeEvaluation()">Cerrar evaluación</button>
+              </div>
             </div>
           </div>
         </div>
         <div id="monitor-students"></div>
+      </div>
+
+      <!-- STATS VIEW -->
+      <div id="eval-stats-view" class="hidden">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="hideEvalStats()">← Volver</button>
+          <h3 style="font-size:18px;font-weight:700" id="eval-stats-title"></h3>
+        </div>
+        <div id="eval-stats-summary" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px"></div>
+        <div id="eval-stats-questions"></div>
       </div>
 
       <!-- RESULTS VIEW -->
@@ -2784,6 +2815,9 @@ let _monitorEvalId = null;
 let _monitorCode = null;
 let _monitorSocket = null;
 let _evalQCounter = 0;
+let _monitorTimeLimit = null;
+let _resultSubmissions = [], _resultPassScore = 0;
+let _resultSortCol = 'name', _resultSortDir = 1;
 
 async function showEvalSection() {
   document.querySelectorAll('.view').forEach(s => s.classList.remove('active'));
@@ -2796,6 +2830,7 @@ async function showEvalSection() {
   hideEvalEditor();
   hideEvalMonitor();
   hideEvalResults();
+  hideEvalStats();
   loadEvals();
 }
 
@@ -2893,6 +2928,7 @@ function renderEvalList() {
             ${ev.status === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="openEvaluation('${ev.id}')">▶ Abrir</button>` : ''}
             ${ev.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="watchEval('${ev.id}')">📊 Monitorear</button>` : ''}
             ${ev.status === 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="viewEvalResults('${ev.id}')">📊 Resultados</button>` : ''}
+            ${ev.status === 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="viewEvalStats('${ev.id}')">📈 Stats</button>` : ''}
             <button class="btn btn-danger btn-sm" onclick="deleteEval('${ev.id}')">🗑️</button>
           </div>
         </div>
@@ -2905,6 +2941,7 @@ function showEvalEditor(data) {
   document.getElementById('eval-list').classList.add('hidden');
   document.getElementById('eval-stats-header').style.display = 'none';
   document.getElementById('eval-filter-bar').style.display = 'none';
+  document.getElementById('eval-stats-view').classList.add('hidden');
   document.getElementById('eval-editor').classList.remove('hidden');
   _evalEditingId = data?.id || null;
   document.getElementById('eval-editor-title').textContent = data ? 'Editar evaluación' : 'Nueva evaluación';
@@ -2920,6 +2957,7 @@ function showEvalEditor(data) {
   if (data?.questions) data.questions.forEach(q => addEvalQuestion(q));
   else { addEvalQuestion(); addEvalQuestion(); }
   updateGradePreview();
+  updateEvalQCount();
 }
 
 function hideEvalEditor() {
@@ -2960,34 +2998,73 @@ function _buildEvalOptRow(i, value, isCorrect) {
 function addEvalQuestion(data) {
   const idx = _evalQCounter++;
   const div = document.createElement('div');
-  div.className = 'card';
-  div.style.marginBottom = '12px';
+  div.className = 'eval-q-card';
   div.dataset.qidx = idx;
 
   let initOpts = data?.options ? data.options.map(o => o ?? '') : ['', '', '', ''];
   initOpts = initOpts.slice(0, 4);
   while (initOpts.length < 4) initOpts.push('');
-
   const optsHtml = initOpts.map((opt, i) => _buildEvalOptRow(i, opt, data && i === data.correctIndex)).join('');
+  const preview = data?.text ? _esc(data.text.substring(0, 55)) + (data.text.length > 55 ? '…' : '') : 'Nueva pregunta';
 
   div.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span class="eval-q-num" style="font-size:13px;font-weight:700;color:var(--muted)">Pregunta ${idx + 1}</span>
-      <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.card').remove();renumberEvalQs()">Eliminar</button>
+    <div class="eval-q-header" onclick="toggleEvalQ(this)">
+      <span class="eval-q-num" style="font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0;min-width:24px">P${idx+1}</span>
+      <span class="eval-q-preview" style="flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${preview}</span>
+      <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+        <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:13px" onclick="moveEvalQ(this,-1)" title="Subir">↑</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:13px" onclick="moveEvalQ(this,1)" title="Bajar">↓</button>
+        <button type="button" class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:13px" onclick="this.closest('.eval-q-card').remove();renumberEvalQs()">✕</button>
+      </div>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px;transition:transform .2s">▼</span>
     </div>
-    <textarea class="eval-q-text" maxlength="180" placeholder="Escribe la pregunta..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:15px;min-height:70px;resize:vertical;outline:none;font-family:inherit">${_esc(data?.text || '')}</textarea>
-    <div class="opt-rows" style="margin-top:10px">${optsHtml}</div>
-    <input type="hidden" class="eval-correct" value="${data ? (data.correctIndex ?? -1) : -1}"/>
-    <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
-      <span style="font-size:12px;color:var(--muted)">🏷️</span>
-      <input type="text" class="eval-tag" maxlength="30" placeholder="Etiqueta (opcional)" value="${_esc(data?.tag || '')}" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none"/>
+    <div class="eval-q-body">
+      <textarea class="eval-q-text" maxlength="180" placeholder="Escribe la pregunta..." oninput="updateEvalQPreview(this)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:15px;min-height:70px;resize:vertical;outline:none;font-family:inherit">${_esc(data?.text || '')}</textarea>
+      <div class="opt-rows" style="margin-top:10px">${optsHtml}</div>
+      <input type="hidden" class="eval-correct" value="${data ? (data.correctIndex ?? -1) : -1}"/>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--muted)">🏷️</span>
+        <input type="text" class="eval-tag" maxlength="30" placeholder="Etiqueta (opcional)" value="${_esc(data?.tag || '')}" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none"/>
+      </div>
     </div>
   `;
   document.getElementById('eval-questions-list').appendChild(div);
+  updateEvalQCount();
+}
+
+function toggleEvalQ(header) {
+  const card = header.closest('.eval-q-card');
+  card.classList.toggle('eval-q-collapsed');
+  const arrow = header.querySelector('span:last-child');
+  if (arrow) arrow.textContent = card.classList.contains('eval-q-collapsed') ? '▶' : '▼';
+}
+
+function updateEvalQPreview(textarea) {
+  const card = textarea.closest('.eval-q-card');
+  const preview = card.querySelector('.eval-q-preview');
+  if (preview) preview.textContent = (textarea.value.substring(0, 55) + (textarea.value.length > 55 ? '…' : '')) || 'Nueva pregunta';
+}
+
+function moveEvalQ(btn, dir) {
+  const card = btn.closest('.eval-q-card');
+  const list = document.getElementById('eval-questions-list');
+  const cards = [...list.querySelectorAll('.eval-q-card')];
+  const idx = cards.indexOf(card);
+  const target = cards[idx + dir];
+  if (!target) return;
+  if (dir === -1) list.insertBefore(card, target);
+  else list.insertBefore(target, card);
+  renumberEvalQs();
+}
+
+function updateEvalQCount() {
+  const count = document.querySelectorAll('#eval-questions-list .eval-q-card').length;
+  const el = document.getElementById('eval-q-count');
+  if (el) el.textContent = `${count} pregunta${count !== 1 ? 's' : ''}`;
 }
 
 function setEvalCorrect(row) {
-  const card = row.closest('.card');
+  const card = row.closest('.eval-q-card');
   card.querySelectorAll('.opt-row').forEach((r, i) => {
     r.classList.remove('correct');
     card.querySelector('.eval-correct').value = -1;
@@ -2999,7 +3076,7 @@ function setEvalCorrect(row) {
 
 function removeEvalOption(btn) {
   const row = btn.closest('.opt-row');
-  const card = row.closest('.card');
+  const card = row.closest('.eval-q-card');
   const rows = card.querySelectorAll('.opt-row');
   if (rows.length <= 2) return;
   row.remove();
@@ -3016,10 +3093,11 @@ function removeEvalOption(btn) {
 }
 
 function renumberEvalQs() {
-  document.querySelectorAll('#eval-questions-list .card').forEach((c, i) => {
-    const label = c.querySelector('span[style*="font-size:13px"]');
-    if (label) label.textContent = `Pregunta ${i + 1}`;
+  document.querySelectorAll('#eval-questions-list .eval-q-card').forEach((c, i) => {
+    const label = c.querySelector('.eval-q-num');
+    if (label) label.textContent = `P${i + 1}`;
   });
+  updateEvalQCount();
 }
 
 async function editEval(id) {
@@ -3036,7 +3114,7 @@ async function saveEval() {
 
   const questions = [];
   let valid = true;
-  document.querySelectorAll('#eval-questions-list .card').forEach((card, i) => {
+  document.querySelectorAll('#eval-questions-list .eval-q-card').forEach((card, i) => {
     const text = card.querySelector('.eval-q-text')?.value.trim();
     const opts = [...card.querySelectorAll('.eval-opt-input')].map(inp => inp.value.trim()).filter(v => v);
     const correctIndex = parseInt(card.querySelector('.eval-correct')?.value ?? -1);
@@ -3089,10 +3167,14 @@ async function watchEval(id) {
   if (!ev) return;
   _monitorEvalId = id;
   _monitorCode = ev.code;
+  _monitorTimeLimit = ev.time_limit || null;
+  const timeLimitEl = document.getElementById('monitor-timelimit');
+  if (timeLimitEl) timeLimitEl.textContent = ev.time_limit || '--';
 
   document.getElementById('eval-list').classList.add('hidden');
   document.getElementById('eval-stats-header').classList.add('hidden');
   document.getElementById('eval-filter-bar').classList.add('hidden');
+  document.getElementById('eval-stats-view').classList.add('hidden');
   document.getElementById('eval-monitor').classList.remove('hidden');
   document.getElementById('monitor-title').textContent = ev.title;
   document.getElementById('monitor-code').textContent = ev.code || '';
@@ -3124,9 +3206,23 @@ function renderMonitorStudents(students) {
     return;
   }
 
+  const timeLimitSec = _monitorTimeLimit ? _monitorTimeLimit * 60 : null;
+  const now = Date.now();
+
   document.getElementById('monitor-students').innerHTML = students.map((s, i) => {
     const pct = s.total > 0 ? Math.round(s.answered / s.total * 100) : 0;
     const detailId = `detail-${s.submissionId || i}`;
+
+    let timeBadge = '';
+    if (!s.submitted && timeLimitSec && s.joinedAt) {
+      const elapsed = Math.round((now - s.joinedAt) / 1000);
+      const remaining = timeLimitSec - elapsed;
+      const remMin = Math.ceil(remaining / 60);
+      if (remaining <= 0) timeBadge = `<span class="time-danger-badge">⏰ Tiempo!</span>`;
+      else if (remaining <= 300) timeBadge = `<span class="time-danger-badge">⚠ ${remMin}min</span>`;
+      else if (remaining <= 600) timeBadge = `<span class="time-warn-badge">${remMin}min</span>`;
+    }
+
     return `<div class="eval-student-row" style="flex-wrap:wrap;gap:8px">
       <div style="min-width:130px;font-weight:700">${_esc(s.name)}</div>
       <div style="font-size:12px;color:var(--muted);min-width:100px;font-family:monospace">${_esc(s.rut)}</div>
@@ -3143,6 +3239,7 @@ function renderMonitorStudents(students) {
           <div class="eval-prog-bar" style="flex:1"><div class="eval-prog-fill" style="width:${pct}%"></div></div>
           <span style="font-size:12px;color:var(--muted);white-space:nowrap">${s.answered}/${s.total}</span>
         </div>
+        ${timeBadge}
         <span style="font-size:12px;color:var(--muted)">En curso</span>
       `}
       <div id="${detailId}" style="display:none;width:100%;margin-top:4px"></div>
@@ -3232,6 +3329,8 @@ async function viewEvalResults(id) {
     document.getElementById('results-title').dataset.evalId = id;
 
     const passScore = Math.round(ev.pass_percentage / 100 * questions.length);
+    _resultSubmissions = submissions;
+    _resultPassScore = passScore;
 
     // ── Summary stats ──
     const totalSubs = submissions.length;
@@ -3248,34 +3347,7 @@ async function viewEvalResults(id) {
         <div class="eval-stat-chip"><span>${avgTime !== '-' ? avgTime + ' min' : '-'}</span><span>Tiempo promedio</span></div>
       </div>`;
 
-    if (totalSubs === 0) {
-      document.getElementById('results-table').innerHTML = `
-        <tbody><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">
-          Aún no hay entregas para esta evaluación.
-        </td></tr></tbody>`;
-    } else {
-      document.getElementById('results-table').innerHTML = `
-        <thead><tr>
-          <th>RUT</th><th>Nombre</th><th>Correctas</th><th>% Logro</th><th>Nota</th><th>Estado</th><th>Tiempo</th>
-        </tr></thead>
-        <tbody>
-          ${submissions.map(s => {
-            const pct = s.total_count > 0 ? Math.round(s.correct_count / s.total_count * 100) : 0;
-            const passed = s.correct_count >= passScore;
-            const mins = Math.round((s.time_used || 0) / 60);
-            return `<tr>
-              <td style="font-family:monospace;font-size:13px">${_esc(s.student_rut)}</td>
-              <td style="font-weight:600">${_esc(s.student_name)}</td>
-              <td style="text-align:center">${s.correct_count} / ${s.total_count}</td>
-              <td style="text-align:center;font-weight:700">${pct}%</td>
-              <td style="text-align:center;font-weight:800;font-size:16px;color:${passed ? 'var(--success)' : 'var(--danger)'}">${s.grade != null ? s.grade.toFixed(1) : '-'}</td>
-              <td><span class="pass-badge ${passed ? 'pass-yes' : 'pass-no'}">${passed ? 'Aprobado' : 'Reprobado'}</span></td>
-              <td style="font-size:13px;color:var(--muted)">${mins} min</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      `;
-    }
+    renderResultsTable();
 
     if (totalSubs === 0) {
       document.getElementById('results-stats').innerHTML = '';
@@ -3327,6 +3399,52 @@ async function viewEvalResults(id) {
   } catch(e) { toast('Error cargando resultados', true); }
 }
 
+function renderResultsTable() {
+  const submissions = [..._resultSubmissions];
+  const passScore = _resultPassScore;
+  const totalSubs = submissions.length;
+  if (totalSubs === 0) {
+    document.getElementById('results-table').innerHTML = `<tbody><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">Aún no hay entregas para esta evaluación.</td></tr></tbody>`;
+    return;
+  }
+  submissions.sort((a, b) => {
+    let va, vb;
+    if (_resultSortCol === 'name') { va = a.student_name; vb = b.student_name; }
+    else if (_resultSortCol === 'grade') { va = a.grade ?? -1; vb = b.grade ?? -1; }
+    else if (_resultSortCol === 'pct') { va = a.total_count > 0 ? a.correct_count/a.total_count : -1; vb = b.total_count > 0 ? b.correct_count/b.total_count : -1; }
+    else if (_resultSortCol === 'time') { va = a.time_used ?? 0; vb = b.time_used ?? 0; }
+    else { va = a.student_rut; vb = b.student_rut; }
+    if (typeof va === 'string') return va.localeCompare(vb) * _resultSortDir;
+    return (va - vb) * _resultSortDir;
+  });
+  function thC(col) { return `class="${'sort-th'+(_resultSortCol===col?' '+(_resultSortDir===1?'asc':'desc'):'')}"` }
+  function thK(col) { return `onclick="if(_resultSortCol==='${col}')_resultSortDir*=-1;else{_resultSortCol='${col}';_resultSortDir=1};renderResultsTable()"` }
+  document.getElementById('results-table').innerHTML = `
+    <thead><tr>
+      <th ${thC('rut')} ${thK('rut')}>RUT</th>
+      <th ${thC('name')} ${thK('name')}>Nombre</th>
+      <th ${thC('pct')} ${thK('pct')} style="text-align:center">Correctas</th>
+      <th ${thC('pct')} ${thK('pct')} style="text-align:center">% Logro</th>
+      <th ${thC('grade')} ${thK('grade')} style="text-align:center">Nota</th>
+      <th>Estado</th>
+      <th ${thC('time')} ${thK('time')}>Tiempo</th>
+    </tr></thead>
+    <tbody>${submissions.map(s => {
+      const pct = s.total_count > 0 ? Math.round(s.correct_count / s.total_count * 100) : 0;
+      const passed = s.correct_count >= passScore;
+      const mins = Math.round((s.time_used || 0) / 60);
+      return `<tr>
+        <td style="font-family:monospace;font-size:13px">${_esc(s.student_rut)}</td>
+        <td style="font-weight:600">${_esc(s.student_name)}</td>
+        <td style="text-align:center">${s.correct_count}/${s.total_count}</td>
+        <td style="text-align:center;font-weight:700">${pct}%</td>
+        <td style="text-align:center;font-weight:800;font-size:16px;color:${passed?'var(--success)':'var(--danger)'}">${s.grade!=null?s.grade.toFixed(1):'-'}</td>
+        <td><span class="pass-badge ${passed?'pass-yes':'pass-no'}">${passed?'Aprobado':'Reprobado'}</span></td>
+        <td style="font-size:13px;color:var(--muted)">${mins} min</td>
+      </tr>`;
+    }).join('')}</tbody>`;
+}
+
 function hideEvalResults() {
   document.getElementById('eval-list').classList.remove('hidden');
   document.getElementById('eval-stats-header').classList.remove('hidden');
@@ -3354,6 +3472,82 @@ async function exportEvalCsv() {
   const id = document.getElementById('results-title').dataset.evalId;
   if (!id) return;
   window.open(`${API}/evaluations/${id}/results/csv?token=${encodeURIComponent(_token)}`, '_blank');
+}
+
+async function viewEvalStats(id) {
+  try {
+    const res = await authFetch(`${API}/evaluations/${id}/stats`);
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Error', true); return; }
+    const { evaluation: ev, totalSubs, passed, avgGrade, avgTime, qStats } = data;
+
+    document.getElementById('eval-list').classList.add('hidden');
+    document.getElementById('eval-stats-header').style.display = 'none';
+    document.getElementById('eval-filter-bar').style.display = 'none';
+    document.getElementById('eval-stats-view').classList.remove('hidden');
+    document.getElementById('eval-stats-title').textContent = ev.title;
+    document.getElementById('eval-stats-title').dataset.evalId = id;
+
+    const passRate = totalSubs > 0 ? Math.round(passed / totalSubs * 100) : null;
+    const avgTimeMins = avgTime ? Math.round(avgTime / 60) : null;
+
+    document.getElementById('eval-stats-summary').innerHTML = `
+      <div class="eval-stat-chip"><span>${totalSubs}</span><span>Entregas</span></div>
+      <div class="eval-stat-chip"><span style="color:var(--accent2)">${avgGrade ?? '-'}</span><span>Nota promedio</span></div>
+      <div class="eval-stat-chip"><span style="color:${passRate !== null && passRate >= 60 ? 'var(--success)' : 'var(--danger)'}">${passRate !== null ? passRate + '%' : '-'}</span><span>Aprobación</span></div>
+      <div class="eval-stat-chip"><span>${avgTimeMins !== null ? avgTimeMins + ' min' : '-'}</span><span>Tiempo promedio</span></div>
+    `;
+
+    if (!totalSubs) {
+      document.getElementById('eval-stats-questions').innerHTML = `<p style="color:var(--muted);text-align:center;padding:40px">Sin entregas aún.</p>`;
+      return;
+    }
+
+    const sorted = [...qStats].sort((a,b) => {
+      const wa = a.total > 0 ? 1 - a.correctCount/a.total : -1;
+      const wb = b.total > 0 ? 1 - b.correctCount/b.total : -1;
+      return wb - wa;
+    });
+
+    document.getElementById('eval-stats-questions').innerHTML = `
+      <h4 style="font-size:15px;font-weight:700;margin-bottom:12px">Preguntas por dificultad</h4>
+      ${sorted.map(({ text, options, correct_index, tag, tallyMap, total, correctCount }, i) => {
+        const wrongPct = total > 0 ? Math.round((1 - correctCount/total) * 100) : null;
+        const badge = wrongPct === null ? 'Sin datos' : wrongPct > 50 ? `❌ ${wrongPct}% incorrecto` : `✅ ${100-wrongPct}% correcto`;
+        const bColor = wrongPct === null ? 'var(--muted)' : wrongPct > 50 ? 'var(--danger)' : 'var(--success)';
+        const opts = typeof options === 'string' ? JSON.parse(options) : (options || []);
+        return `<div class="card" style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
+            <div style="font-size:14px;font-weight:600;flex:1">${i+1}. ${_esc(text)}${tag?` <span class="eval-tag-chip">🏷 ${_esc(tag)}</span>`:''}
+            </div>
+            <div style="font-size:13px;font-weight:800;color:${bColor};white-space:nowrap">${badge}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${opts.map((opt, j) => {
+              const count = tallyMap[j] || 0;
+              const pct = total > 0 ? Math.round(count/total*100) : 0;
+              const isCorrect = j === correct_index;
+              return `<div style="display:flex;align-items:center;gap:8px;font-size:13px">
+                <span style="min-width:20px;font-weight:700;color:${isCorrect?'var(--success)':''}">${['A','B','C','D'][j]}</span>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
+                  <div style="height:100%;background:${isCorrect?'#4CAF50':['#E63946','#2196F3','#FF9800','#9C27B0'][j]};border-radius:4px;width:${pct}%;transition:width .5s"></div>
+                </div>
+                <span style="min-width:24px;text-align:right;color:var(--muted)">${count}</span>
+                ${isCorrect?'<span style="color:var(--success);font-size:11px">✓</span>':''}
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:var(--muted)">${total} resp.</div>
+        </div>`;
+      }).join('')}
+    `;
+  } catch(e) { toast('Error cargando stats', true); }
+}
+
+function hideEvalStats() {
+  document.getElementById('eval-list').classList.remove('hidden');
+  document.getElementById('eval-stats-view').classList.add('hidden');
+  renderEvalList();
 }
 
 // ── Eval Import ───────────────────────────────────────────────────────────────

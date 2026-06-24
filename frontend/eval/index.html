@@ -96,8 +96,13 @@
   <div class="card" style="padding:0;overflow:hidden">
     <div class="eval-header">
       <div>
-        <div id="eval-title" style="font-size:14px;font-weight:700;margin-bottom:2px"></div>
-        <div class="eval-progress" id="eval-progress">0 / 0 respondidas</div>
+        <div id="eval-title" style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px"></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="eval-progress" id="eval-progress">0 / 0</div>
+          <div style="width:60px;height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden">
+            <div id="eval-prog-bar" style="height:100%;background:var(--accent2);border-radius:3px;transition:width .4s;width:0%"></div>
+          </div>
+        </div>
       </div>
       <div class="eval-timer" id="eval-timer">--:--</div>
       <button class="btn-submit-eval" onclick="confirmSubmit()">Enviar →</button>
@@ -178,6 +183,7 @@ let currentQ = 0;
 let _timerInterval = null;
 let _timeLeft = 0;
 let _submitted = false;
+let _optionMaps = [];
 
 const urlCode = new URLSearchParams(window.location.search).get('code');
 if (urlCode) document.getElementById('inp-code').value = urlCode.toUpperCase();
@@ -201,6 +207,14 @@ function joinEval() {
 
   socket.on('eval:joined', ({ title, questions, timeLimit }) => {
     _questions = questions;
+    _optionMaps = questions.map(q => {
+      const indices = q.options.map((_, i) => i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+      return indices;
+    });
     _timeLeft = timeLimit;
     _submitted = false;
     _answers = {};
@@ -289,7 +303,10 @@ function renderNav() {
   }).join('');
 
   const answered = Object.keys(_answers).length;
-  document.getElementById('eval-progress').textContent = `${answered} / ${_questions.length} respondidas`;
+  const progPct = _questions.length > 0 ? Math.round(answered / _questions.length * 100) : 0;
+  document.getElementById('eval-progress').textContent = `${answered} / ${_questions.length}`;
+  const barEl = document.getElementById('eval-prog-bar');
+  if (barEl) barEl.style.width = progPct + '%';
 }
 
 function renderQuestion(idx) {
@@ -302,10 +319,10 @@ function renderQuestion(idx) {
     <div class="q-num">Pregunta ${idx + 1} de ${_questions.length}</div>
     <div class="q-text">${_esc(q.text)}</div>
     <div class="q-options">
-      ${q.options.map((opt, i) => `
-        <button class="opt-btn${selectedIdx === i ? ' selected' : ''}" onclick="selectAnswer(${i})">
-          <span class="opt-letter">${OPT_LETTERS[i]}</span>
-          <span>${_esc(opt)}</span>
+      ${(_optionMaps[idx] || q.options.map((_,i)=>i)).map((origIdx, shuffledI) => `
+        <button class="opt-btn${selectedIdx === origIdx ? ' selected' : ''}" onclick="selectAnswer(${origIdx})">
+          <span class="opt-letter">${OPT_LETTERS[shuffledI]}</span>
+          <span>${_esc(q.options[origIdx])}</span>
         </button>
       `).join('')}
     </div>

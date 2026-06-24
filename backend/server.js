@@ -559,6 +559,31 @@ app.patch('/api/evaluations/:id/status', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/evaluations/:id/stats', requireAuth, (req, res) => {
+  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!ev) return res.status(404).json({ error: 'No encontrada' });
+  const submissions = db.prepare('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? ORDER BY submitted_at').all(req.params.id);
+  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  submissions.forEach(s => { try { s.answers = JSON.parse(s.answers); } catch { s.answers = []; } });
+  questions.forEach(q => { try { q.options = JSON.parse(q.options); } catch { q.options = []; } });
+  const totalSubs = submissions.length;
+  const passScore = Math.round(ev.pass_percentage / 100 * questions.length);
+  const passed = submissions.filter(s => s.correct_count >= passScore).length;
+  const avgGrade = totalSubs > 0 ? parseFloat((submissions.reduce((a,s) => a + (s.grade||0), 0) / totalSubs).toFixed(1)) : null;
+  const avgTime = totalSubs > 0 ? Math.round(submissions.reduce((a,s) => a + (s.time_used||0), 0) / totalSubs) : null;
+  const qStats = questions.map(q => {
+    const tallyMap = {};
+    submissions.forEach(s => {
+      const ans = s.answers.find(a => a.questionId === q.id);
+      if (ans) tallyMap[ans.answerIndex] = (tallyMap[ans.answerIndex] || 0) + 1;
+    });
+    const total = Object.values(tallyMap).reduce((a,b) => a+b, 0);
+    const correctCount = tallyMap[q.correct_index] || 0;
+    return { id: q.id, text: q.text, options: q.options, correct_index: q.correct_index, tag: q.tag, tallyMap, total, correctCount };
+  });
+  res.json({ evaluation: ev, totalSubs, passed, avgGrade, avgTime, qStats });
+});
+
 app.get('/api/evaluations/:id/results', requireAuth, (req, res) => {
   const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
@@ -1103,7 +1128,8 @@ function _getEvalStudentList(session) {
     submitted: s.submitted,
     correctCount: s.correctCount ?? null,
     grade: s.grade ?? null,
-    submissionId: s.submissionId ?? null
+    submissionId: s.submissionId ?? null,
+    joinedAt: s.joinedAt ?? null
   }));
 }
 
