@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Synapto — Evaluación</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="../config.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d1a; --surface: #161628; --surface2: #1e1e38;
+      --border: rgba(255,255,255,0.08); --accent: #7c5cfc; --accent2: #4ecdc4;
+      --text: #f0f0ff; --muted: rgba(240,240,255,0.45);
+      --success: #4CAF50; --danger: #E63946;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; min-height: 100vh; }
+    .screen { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 16px; }
+    .hidden { display: none !important; }
+    .logo { text-align: center; margin-bottom: 8px; }
+    .logo h1 { font-size: 28px; font-weight: 800; background: linear-gradient(90deg, #7c5cfc, #4ecdc4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    input[type="text"] { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); padding: 14px 16px; font-size: 16px; outline: none; }
+    input:focus { border-color: var(--accent); }
+    .btn { width: 100%; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .error-msg { color: var(--danger); font-size: 14px; text-align: center; display: none; }
+
+    .eval-header { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: 16px 16px 0 0; }
+    .eval-timer { font-size: 22px; font-weight: 800; color: var(--accent2); font-variant-numeric: tabular-nums; }
+    .eval-timer.warn { color: #FF9800; }
+    .eval-timer.danger { color: var(--danger); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    .eval-progress { font-size: 13px; color: var(--muted); }
+    .btn-submit-eval { padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 700; background: var(--accent); color: #fff; border: none; cursor: pointer; white-space: nowrap; }
+    .btn-submit-eval:disabled { opacity: .4; cursor: not-allowed; }
+
+    .q-nav { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 20px; background: var(--surface2); }
+    .q-nav-btn { width: 36px; height: 36px; border-radius: 8px; border: 2px solid var(--border); background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; }
+    .q-nav-btn.answered { background: rgba(78,205,196,.2); border-color: var(--accent2); color: var(--accent2); }
+    .q-nav-btn.current { border-color: var(--accent); color: var(--accent); background: rgba(124,92,252,.15); }
+
+    .q-area { padding: 24px 20px; }
+    .q-num { font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+    .q-text { font-size: 18px; font-weight: 600; line-height: 1.5; margin-bottom: 20px; }
+    .q-options { display: flex; flex-direction: column; gap: 10px; }
+    .opt-btn {
+      padding: 14px 18px; border-radius: 12px; border: 2px solid var(--border);
+      background: var(--surface2); color: var(--text); font-size: 15px; font-weight: 500;
+      cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px;
+      transition: border-color .15s, background .15s;
+    }
+    .opt-btn:hover { border-color: var(--accent); background: rgba(124,92,252,.08); }
+    .opt-btn.selected { border-color: var(--accent2); background: rgba(78,205,196,.12); color: var(--accent2); font-weight: 700; }
+    .opt-letter { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0; }
+    .opt-btn.selected .opt-letter { background: var(--accent2); color: #000; }
+
+    .q-nav-btns { display: flex; gap: 10px; padding: 0 20px 20px; }
+
+    .result-big { font-size: 64px; font-weight: 900; text-align: center; color: var(--accent2); }
+    .result-label { font-size: 16px; color: var(--muted); text-align: center; }
+    .grade-display { font-size: 48px; font-weight: 900; text-align: center; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 20px; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; max-width: 360px; width: 100%; }
+  </style>
+</head>
+<body>
+
+<!-- JOIN -->
+<div id="s-join" class="screen">
+  <div class="logo"><h1>Synapto</h1></div>
+  <div class="card" style="display:flex;flex-direction:column;gap:16px">
+    <div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Código de evaluación</p>
+      <input type="text" id="inp-code" placeholder="ABC123" maxlength="8" style="text-transform:uppercase;font-size:20px;font-weight:700;letter-spacing:4px;text-align:center"/>
+    </div>
+    <div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:6px">Tu nombre</p>
+      <input type="text" id="inp-name" placeholder="Nombre completo" maxlength="40"/>
+    </div>
+    <div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:6px">RUT (sin puntos, con guión)</p>
+      <input type="text" id="inp-rut" placeholder="12345678-9" maxlength="12"/>
+    </div>
+    <p class="error-msg" id="join-error"></p>
+    <button class="btn btn-primary" onclick="joinEval()">Ingresar</button>
+  </div>
+</div>
+
+<!-- EVAL -->
+<div id="s-eval" class="screen hidden" style="max-width:640px;padding:0">
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="eval-header">
+      <div>
+        <div id="eval-title" style="font-size:14px;font-weight:700;margin-bottom:2px"></div>
+        <div class="eval-progress" id="eval-progress">0 / 0 respondidas</div>
+      </div>
+      <div class="eval-timer" id="eval-timer">--:--</div>
+      <button class="btn-submit-eval" onclick="confirmSubmit()">Enviar →</button>
+    </div>
+    <div class="q-nav" id="q-nav"></div>
+    <div class="q-area" id="q-area"></div>
+    <div class="q-nav-btns">
+      <button class="btn btn-ghost" style="flex:1" onclick="goQuestion(currentQ - 1)">← Anterior</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="goQuestion(currentQ + 1)">Siguiente →</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div id="s-result" class="screen hidden">
+  <div class="logo"><h1>Synapto</h1></div>
+  <div class="card" style="text-align:center;gap:12px;display:flex;flex-direction:column">
+    <div style="font-size:32px">📋</div>
+    <p style="font-size:18px;font-weight:700" id="result-title">Evaluación enviada</p>
+    <div class="result-big" id="result-score"></div>
+    <div class="result-label" id="result-label"></div>
+    <div class="grade-display" id="result-grade" style="display:none"></div>
+    <p style="font-size:13px;color:var(--muted);margin-top:8px">Tus respuestas han sido registradas.</p>
+  </div>
+</div>
+
+<!-- TIMEOUT -->
+<div id="s-timeout" class="screen hidden">
+  <div class="logo"><h1>Synapto</h1></div>
+  <div class="card" style="text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">⏰</div>
+    <p style="font-size:18px;font-weight:700;margin-bottom:8px">Tiempo agotado</p>
+    <p style="font-size:14px;color:var(--muted)" id="timeout-score"></p>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div id="modal-confirm" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 style="font-size:18px;font-weight:800;margin-bottom:12px">¿Enviar evaluación?</h3>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:8px" id="confirm-msg"></p>
+    <p style="font-size:13px;color:#FF9800;margin-bottom:20px" id="confirm-warn"></p>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('modal-confirm').classList.add('hidden')">Cancelar</button>
+      <button class="btn btn-primary" style="flex:1" onclick="doSubmit()">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function _esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function showScreen(id) {
+  ['s-join','s-eval','s-result','s-timeout'].forEach(s => document.getElementById(s).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function validateRut(rut) {
+  const clean = rut.replace(/\./g,'').toUpperCase();
+  if (!/^\d{7,8}-[\dK]$/.test(clean)) return false;
+  const [body, dv] = clean.split('-');
+  let sum = 0, mul = 2;
+  for (let i = body.length - 1; i >= 0; i--) {
+    sum += parseInt(body[i]) * mul;
+    mul = mul === 7 ? 2 : mul + 1;
+  }
+  const expected = 11 - (sum % 11);
+  const dvExpected = expected === 11 ? '0' : expected === 10 ? 'K' : String(expected);
+  return dv === dvExpected;
+}
+
+let socket = null;
+let _questions = [];
+let _answers = {};
+let currentQ = 0;
+let _timerInterval = null;
+let _timeLeft = 0;
+let _submitted = false;
+
+const urlCode = new URLSearchParams(window.location.search).get('code');
+if (urlCode) document.getElementById('inp-code').value = urlCode.toUpperCase();
+
+function joinEval() {
+  const code = document.getElementById('inp-code').value.trim().toUpperCase();
+  const name = document.getElementById('inp-name').value.trim();
+  const rut = document.getElementById('inp-rut').value.trim();
+  const errEl = document.getElementById('join-error');
+  errEl.style.display = 'none';
+
+  if (!code || !name || !rut) { showError('Completá todos los campos'); return; }
+  if (!validateRut(rut)) { showError('RUT inválido. Formato: 12345678-9'); return; }
+
+  if (socket) socket.disconnect();
+  socket = io(SYNAPTO_CONFIG.backendUrl);
+
+  socket.on('connect', () => {
+    socket.emit('eval:join', { code, name, rut });
+  });
+
+  socket.on('eval:joined', ({ title, questions, timeLimit }) => {
+    _questions = questions;
+    _timeLeft = timeLimit;
+    _submitted = false;
+    _answers = {};
+    currentQ = 0;
+
+    document.getElementById('eval-title').textContent = title;
+    startTimer();
+    renderNav();
+    renderQuestion(0);
+    showScreen('s-eval');
+  });
+
+  socket.on('eval:result', ({ correctCount, totalCount, grade }) => {
+    _submitted = true;
+    clearInterval(_timerInterval);
+    document.getElementById('result-score').textContent = correctCount + ' / ' + totalCount;
+    document.getElementById('result-label').textContent = Math.round(correctCount / totalCount * 100) + '% de logro';
+    if (grade != null) {
+      document.getElementById('result-grade').textContent = 'Nota: ' + grade.toFixed(1);
+      document.getElementById('result-grade').style.display = 'block';
+    }
+    showScreen('s-result');
+  });
+
+  socket.on('eval:timeout', () => {
+    if (_submitted) return;
+    clearInterval(_timerInterval);
+    const answersArr = Object.entries(_answers).map(([questionId, answerIndex]) => ({ questionId, answerIndex }));
+    socket.emit('eval:submit', { answers: answersArr });
+    const answered = Object.keys(_answers).length;
+    document.getElementById('timeout-score').textContent = `Respondiste ${answered} de ${_questions.length} preguntas.`;
+    showScreen('s-timeout');
+  });
+
+  socket.on('eval:error', (msg) => {
+    showError(msg);
+    if (socket) { socket.disconnect(); socket = null; }
+  });
+}
+
+function showError(msg) {
+  const el = document.getElementById('join-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function startTimer() {
+  clearInterval(_timerInterval);
+  _timerInterval = setInterval(() => {
+    _timeLeft--;
+    updateTimerDisplay();
+    if (_timeLeft <= 0) {
+      clearInterval(_timerInterval);
+      if (!_submitted) {
+        const answersArr = Object.entries(_answers).map(([questionId, answerIndex]) => ({ questionId, answerIndex }));
+        socket.emit('eval:submit', { answers: answersArr });
+        const answered = Object.keys(_answers).length;
+        document.getElementById('timeout-score').textContent = `Respondiste ${answered} de ${_questions.length} preguntas.`;
+        showScreen('s-timeout');
+      }
+    }
+  }, 1000);
+  updateTimerDisplay();
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('eval-timer');
+  const h = Math.floor(_timeLeft / 3600);
+  const m = Math.floor((_timeLeft % 3600) / 60);
+  const s = _timeLeft % 60;
+  const str = h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+    : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  el.textContent = str;
+  el.className = 'eval-timer' + (_timeLeft <= 300 && _timeLeft > 60 ? ' warn' : _timeLeft <= 60 ? ' danger' : '');
+}
+
+const OPT_LETTERS = ['A','B','C','D'];
+
+function renderNav() {
+  const nav = document.getElementById('q-nav');
+  nav.innerHTML = _questions.map((q, i) => {
+    const answered = _answers[q.id] !== undefined;
+    const cls = 'q-nav-btn' + (answered ? ' answered' : '') + (i === currentQ ? ' current' : '');
+    return `<button class="${cls}" onclick="goQuestion(${i})">${i+1}</button>`;
+  }).join('');
+
+  const answered = Object.keys(_answers).length;
+  document.getElementById('eval-progress').textContent = `${answered} / ${_questions.length} respondidas`;
+}
+
+function renderQuestion(idx) {
+  if (idx < 0 || idx >= _questions.length) return;
+  currentQ = idx;
+  const q = _questions[idx];
+  const selectedIdx = _answers[q.id];
+
+  document.getElementById('q-area').innerHTML = `
+    <div class="q-num">Pregunta ${idx + 1} de ${_questions.length}</div>
+    <div class="q-text">${_esc(q.text)}</div>
+    <div class="q-options">
+      ${q.options.map((opt, i) => `
+        <button class="opt-btn${selectedIdx === i ? ' selected' : ''}" onclick="selectAnswer(${i})">
+          <span class="opt-letter">${OPT_LETTERS[i]}</span>
+          <span>${_esc(opt)}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+  renderNav();
+}
+
+function goQuestion(idx) {
+  if (idx < 0 || idx >= _questions.length) return;
+  renderQuestion(idx);
+}
+
+function selectAnswer(optIdx) {
+  const q = _questions[currentQ];
+  const wasAnswered = _answers[q.id] !== undefined;
+  _answers[q.id] = optIdx;
+
+  if (socket) socket.emit('eval:answer', { questionId: q.id, answerIndex: optIdx });
+
+  renderQuestion(currentQ);
+  if (!wasAnswered && currentQ < _questions.length - 1) {
+    setTimeout(() => goQuestion(currentQ + 1), 300);
+  }
+}
+
+function confirmSubmit() {
+  const answered = Object.keys(_answers).length;
+  const total = _questions.length;
+  const unanswered = total - answered;
+  document.getElementById('confirm-msg').textContent = `Respondiste ${answered} de ${total} preguntas.`;
+  const warnEl = document.getElementById('confirm-warn');
+  if (unanswered > 0) {
+    warnEl.textContent = `⚠️ Tenés ${unanswered} pregunta${unanswered > 1 ? 's' : ''} sin responder.`;
+    warnEl.style.display = 'block';
+  } else {
+    warnEl.style.display = 'none';
+  }
+  document.getElementById('modal-confirm').classList.remove('hidden');
+}
+
+function doSubmit() {
+  document.getElementById('modal-confirm').classList.add('hidden');
+  if (!socket || _submitted) return;
+  _submitted = true;
+  clearInterval(_timerInterval);
+  const answersArr = Object.entries(_answers).map(([questionId, answerIndex]) => ({ questionId, answerIndex }));
+  socket.emit('eval:submit', { answers: answersArr });
+}
+</script>
+</body>
+</html>

@@ -342,6 +342,23 @@
     .preview-dots { display: flex; gap: 5px; }
     .preview-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); }
     .preview-dot.active { background: var(--accent2); border-color: var(--accent2); }
+
+    /* Evaluations */
+    .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; border-top: 3px solid var(--accent2); }
+    .eval-status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: .3px; }
+    .eval-status-draft { background: rgba(255,255,255,.07); color: var(--muted); }
+    .eval-status-open { background: rgba(78,205,196,.15); color: var(--accent2); }
+    .eval-status-closed { background: rgba(124,92,252,.15); color: var(--accent); }
+    .eval-student-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .eval-prog-bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+    .eval-prog-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width .4s; }
+    .eval-result-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .eval-result-table th { text-align: left; padding: 8px 12px; font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--border); }
+    .eval-result-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .eval-result-table tr:last-child td { border-bottom: none; }
+    .pass-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .pass-yes { background: rgba(76,175,80,.15); color: #4CAF50; }
+    .pass-no { background: rgba(230,57,70,.15); color: #E63946; }
   </style>
 </head>
 <body>
@@ -370,6 +387,10 @@
       <div class="nav-item" id="nav-users" style="display:none" onclick="showView('users')">
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"/></svg>
         <span class="nav-label">Usuarios</span>
+      </div>
+      <div class="nav-item" onclick="showEvalSection()">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        <span class="nav-label">Evaluaciones</span>
       </div>
     </nav>
 
@@ -695,6 +716,86 @@ Opción 4</div>
       </div>
       <div id="users-table-wrap">
         <div class="empty"><div class="empty-icon">👥</div><p>Cargando usuarios…</p></div>
+      </div>
+    </div>
+
+    <!-- ═══ EVALUACIONES SECTION ══════════════════════════════════════════════════ -->
+    <div id="sec-evals" class="view">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+        <h2 style="font-size:24px;font-weight:800">Evaluaciones</h2>
+        <button class="btn btn-primary btn-sm" onclick="showEvalEditor()">+ Nueva evaluación</button>
+      </div>
+      <div id="eval-list"></div>
+
+      <!-- EVAL EDITOR -->
+      <div id="eval-editor" class="hidden">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <button class="btn btn-ghost btn-sm" onclick="hideEvalEditor()">← Volver</button>
+          <h3 style="font-size:18px;font-weight:700" id="eval-editor-title">Nueva evaluación</h3>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="form-group">
+            <label>Título</label>
+            <input type="text" class="inp" id="eval-title-inp" placeholder="Ej: Prueba Unidad 3" maxlength="80"/>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-top:14px">
+            <div class="form-group">
+              <label>Tiempo límite (min)</label>
+              <input type="number" id="eval-time-inp" value="90" min="5" max="300"/>
+            </div>
+            <div class="form-group">
+              <label>Nota mínima</label>
+              <input type="number" id="eval-grade-min" value="1.0" min="0" max="100" step="0.1"/>
+            </div>
+            <div class="form-group">
+              <label>Nota máxima</label>
+              <input type="number" id="eval-grade-max" value="7.0" min="0" max="100" step="0.1"/>
+            </div>
+            <div class="form-group">
+              <label>% aprobación</label>
+              <input type="number" id="eval-pass-pct" value="60" min="1" max="100"/>
+            </div>
+          </div>
+        </div>
+        <div id="eval-questions-list"></div>
+        <button class="btn btn-ghost" style="margin-top:12px" onclick="addEvalQuestion()">+ Agregar pregunta</button>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-ghost" onclick="hideEvalEditor()">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveEval()">Guardar evaluación</button>
+        </div>
+      </div>
+
+      <!-- LIVE MONITOR -->
+      <div id="eval-monitor" class="hidden">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <button class="btn btn-ghost btn-sm" onclick="hideEvalMonitor()">← Volver</button>
+          <h3 style="font-size:18px;font-weight:700" id="monitor-title"></h3>
+          <span class="eval-status-badge eval-status-open">● En vivo</span>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+            <div><span style="font-size:28px;font-weight:900" id="monitor-submitted">0</span><div style="font-size:12px;color:var(--muted)">enviaron</div></div>
+            <div><span style="font-size:28px;font-weight:900" id="monitor-active">0</span><div style="font-size:12px;color:var(--muted)">en progreso</div></div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;letter-spacing:2px" id="monitor-code"></div>
+              <button class="btn btn-danger btn-sm" onclick="closeEvaluation()">Cerrar evaluación</button>
+            </div>
+          </div>
+        </div>
+        <div id="monitor-students"></div>
+      </div>
+
+      <!-- RESULTS VIEW -->
+      <div id="eval-results" class="hidden">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="hideEvalResults()">← Volver</button>
+          <h3 style="font-size:18px;font-weight:700" id="results-title"></h3>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="exportEvalCsv()">⬇️ Exportar CSV</button>
+        </div>
+        <div class="card" style="overflow-x:auto;margin-bottom:20px">
+          <table class="eval-result-table" id="results-table"></table>
+        </div>
+        <div id="results-stats"></div>
       </div>
     </div>
 
@@ -2592,6 +2693,356 @@ function toggleMute() {
   sound.setMuted(sound._muted);
   document.getElementById('mute-btn').textContent = sound._muted ? '🔇' : '🔊';
   document.getElementById('vol-slider').value = sound._muted ? 0 : sound._volume;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EVALUACIONES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let _evals = [];
+let _evalEditingId = null;
+let _monitorEvalId = null;
+let _monitorCode = null;
+let _monitorSocket = null;
+let _evalQCounter = 0;
+
+async function showEvalSection() {
+  document.querySelectorAll('.view').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const sec = document.getElementById('sec-evals');
+  sec.classList.add('active');
+  // Mark the evaluaciones nav item active
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(n => { if (n.textContent.includes('Evaluaciones')) n.classList.add('active'); });
+  hideEvalEditor();
+  hideEvalMonitor();
+  hideEvalResults();
+  loadEvals();
+}
+
+async function loadEvals() {
+  try {
+    const res = await authFetch(`${API}/evaluations`);
+    _evals = await res.json();
+    renderEvalList();
+  } catch(e) { toast('Error cargando evaluaciones', true); }
+}
+
+function renderEvalList() {
+  const el = document.getElementById('eval-list');
+  if (!_evals.length) {
+    el.innerHTML = `<div style="text-align:center;padding:48px;color:var(--muted)">
+      <div style="font-size:48px;margin-bottom:12px">📋</div>
+      <p>Todavía no tenés evaluaciones. Creá una para empezar.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = _evals.map(ev => {
+    const statusBadge = {
+      draft: '<span class="eval-status-badge eval-status-draft">Borrador</span>',
+      open: '<span class="eval-status-badge eval-status-open">● Abierta</span>',
+      closed: '<span class="eval-status-badge eval-status-closed">Cerrada</span>',
+    }[ev.status] || '';
+    const codeChip = ev.code ? `<span style="font-family:monospace;font-size:12px;background:var(--surface2);padding:2px 8px;border-radius:6px;letter-spacing:2px">${ev.code}</span>` : '';
+    return `<div class="eval-card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:17px;font-weight:700;margin-bottom:6px">${_esc(ev.title)}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${statusBadge}
+            ${codeChip}
+            <span style="font-size:12px;color:var(--muted)">❓ ${ev.question_count} preguntas</span>
+            <span style="font-size:12px;color:var(--muted)">⏱ ${ev.time_limit} min</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${ev.status === 'draft' ? `<button class="btn btn-ghost btn-sm" onclick="editEval('${ev.id}')">✏️ Editar</button>` : ''}
+          ${ev.status === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="openEvaluation('${ev.id}')">▶ Abrir</button>` : ''}
+          ${ev.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="watchEval('${ev.id}')">📊 Monitorear</button>` : ''}
+          ${ev.status === 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="viewEvalResults('${ev.id}')">📊 Resultados</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="deleteEval('${ev.id}')">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showEvalEditor(data) {
+  document.getElementById('eval-list').classList.add('hidden');
+  document.getElementById('eval-editor').classList.remove('hidden');
+  _evalEditingId = data?.id || null;
+  document.getElementById('eval-editor-title').textContent = data ? 'Editar evaluación' : 'Nueva evaluación';
+  document.getElementById('eval-title-inp').value = data?.title || '';
+  document.getElementById('eval-time-inp').value = data?.time_limit || 90;
+  document.getElementById('eval-grade-min').value = data?.grade_min ?? 1.0;
+  document.getElementById('eval-grade-max').value = data?.grade_max ?? 7.0;
+  document.getElementById('eval-pass-pct').value = data?.pass_percentage ?? 60;
+  _evalQCounter = 0;
+  const list = document.getElementById('eval-questions-list');
+  list.innerHTML = '';
+  if (data?.questions) data.questions.forEach(q => addEvalQuestion(q));
+  else { addEvalQuestion(); addEvalQuestion(); }
+}
+
+function hideEvalEditor() {
+  document.getElementById('eval-list').classList.remove('hidden');
+  document.getElementById('eval-editor').classList.add('hidden');
+}
+
+function addEvalQuestion(data) {
+  const idx = _evalQCounter++;
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.style.marginBottom = '12px';
+  div.dataset.qidx = idx;
+  const optsHtml = (data?.options || ['','','']).map((opt, i) => `
+    <div class="opt-row opt-row-${i}${data && i === data.correctIndex ? ' correct' : ''}" onclick="setEvalCorrect(this)" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:6px">
+      <div style="width:28px;height:28px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0">${['A','B','C','D'][i]}</div>
+      <input type="text" class="eval-opt-input" maxlength="120" placeholder="Opción ${['A','B','C','D'][i]}" value="${(opt||'').replace(/"/g,'&quot;')}" onclick="event.stopPropagation()" style="flex:1;background:transparent;border:none;color:var(--text);font-size:14px;outline:none"/>
+      <div class="opt-check" style="color:var(--success);font-weight:700;display:${data && i === data.correctIndex ? 'block' : 'none'}">✓</div>
+    </div>
+  `).join('');
+  div.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-size:13px;font-weight:700;color:var(--muted)">Pregunta ${idx + 1}</span>
+      <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.card').remove();renumberEvalQs()">Eliminar</button>
+    </div>
+    <textarea class="eval-q-text" maxlength="180" placeholder="Escribe la pregunta..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:15px;min-height:70px;resize:vertical;outline:none;font-family:inherit">${_esc(data?.text || '')}</textarea>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:10px">Hacé click en la opción correcta para marcarla</div>
+    <div class="eval-opts-list">${optsHtml}</div>
+    <input type="hidden" class="eval-correct" value="${data ? data.correctIndex : -1}"/>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:var(--muted)">🏷️</span>
+      <input type="text" class="eval-tag" maxlength="30" placeholder="Etiqueta (opcional)" value="${_esc(data?.tag || '')}" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none"/>
+    </div>
+  `;
+  document.getElementById('eval-questions-list').appendChild(div);
+}
+
+function setEvalCorrect(row) {
+  const card = row.closest('.card');
+  card.querySelectorAll('.opt-row').forEach((r) => {
+    r.classList.remove('correct');
+    const check = r.querySelector('.opt-check');
+    if (check) check.style.display = 'none';
+  });
+  row.classList.add('correct');
+  const check = row.querySelector('.opt-check');
+  if (check) check.style.display = 'block';
+  const idx = [...card.querySelectorAll('.opt-row')].indexOf(row);
+  card.querySelector('.eval-correct').value = idx;
+}
+
+function renumberEvalQs() {
+  document.querySelectorAll('#eval-questions-list .card').forEach((c, i) => {
+    const label = c.querySelector('span[style*="font-size:13px"]');
+    if (label) label.textContent = `Pregunta ${i + 1}`;
+  });
+}
+
+async function editEval(id) {
+  try {
+    const res = await authFetch(`${API}/evaluations/${id}`);
+    const data = await res.json();
+    showEvalEditor(data);
+  } catch { toast('Error cargando evaluación', true); }
+}
+
+async function saveEval() {
+  const title = document.getElementById('eval-title-inp').value.trim();
+  if (!title) { toast('Escribe un título', true); return; }
+
+  const questions = [];
+  let valid = true;
+  document.querySelectorAll('#eval-questions-list .card').forEach((card, i) => {
+    const text = card.querySelector('.eval-q-text')?.value.trim();
+    const opts = [...card.querySelectorAll('.eval-opt-input')].map(inp => inp.value.trim()).filter(v => v);
+    const correctIndex = parseInt(card.querySelector('.eval-correct')?.value ?? -1);
+    const tag = card.querySelector('.eval-tag')?.value.trim() || null;
+    if (!text || opts.length < 2) { valid = false; toast(`Pregunta ${i+1}: falta enunciado u opciones`, true); return; }
+    if (correctIndex < 0 || correctIndex >= opts.length) { valid = false; toast(`Pregunta ${i+1}: marcá la respuesta correcta`, true); return; }
+    questions.push({ text, options: opts, correctIndex, tag });
+  });
+  if (!valid || !questions.length) return;
+
+  const body = {
+    title,
+    timeLimit: parseInt(document.getElementById('eval-time-inp').value) || 90,
+    gradeMin: parseFloat(document.getElementById('eval-grade-min').value) || 1.0,
+    gradeMax: parseFloat(document.getElementById('eval-grade-max').value) || 7.0,
+    passPercentage: parseInt(document.getElementById('eval-pass-pct').value) || 60,
+    questions
+  };
+
+  try {
+    const url = _evalEditingId ? `/evaluations/${_evalEditingId}` : '/evaluations';
+    const method = _evalEditingId ? 'PUT' : 'POST';
+    const res = await authFetch(`${API}${url}`, { method, body: JSON.stringify(body) });
+    if (!res.ok) { const e = await res.json(); toast(e.error || 'Error', true); return; }
+    toast('Evaluación guardada ✓');
+    hideEvalEditor();
+    loadEvals();
+  } catch { toast('Error guardando', true); }
+}
+
+async function deleteEval(id) {
+  if (!confirm('¿Eliminar esta evaluación?')) return;
+  await authFetch(`${API}/evaluations/${id}`, { method: 'DELETE' });
+  loadEvals();
+}
+
+async function openEvaluation(id) {
+  try {
+    const res = await authFetch(`${API}/evaluations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'open' }) });
+    const data = await res.json();
+    toast('Evaluación abierta · Código: ' + data.code);
+    await loadEvals();
+    watchEval(id);
+  } catch { toast('Error abriendo evaluación', true); }
+}
+
+async function watchEval(id) {
+  const ev = _evals.find(e => e.id === id);
+  if (!ev) return;
+  _monitorEvalId = id;
+  _monitorCode = ev.code;
+
+  document.getElementById('eval-list').classList.add('hidden');
+  document.getElementById('eval-monitor').classList.remove('hidden');
+  document.getElementById('monitor-title').textContent = ev.title;
+  document.getElementById('monitor-code').textContent = ev.code || '';
+
+  if (_monitorSocket) _monitorSocket.disconnect();
+  _monitorSocket = io(SYNAPTO_CONFIG.backendUrl);
+  _monitorSocket.on('connect', () => {
+    _monitorSocket.emit('eval:admin:watch', { code: ev.code, token: _token });
+  });
+  _monitorSocket.on('eval:progress', ({ students }) => renderMonitorStudents(students));
+  _monitorSocket.on('eval:closed', () => { hideEvalMonitor(); loadEvals(); });
+}
+
+function renderMonitorStudents(students) {
+  const submitted = students.filter(s => s.submitted).length;
+  const active = students.filter(s => !s.submitted).length;
+  document.getElementById('monitor-submitted').textContent = submitted;
+  document.getElementById('monitor-active').textContent = active;
+
+  document.getElementById('monitor-students').innerHTML = students.length === 0
+    ? `<p style="color:var(--muted);text-align:center;padding:24px">Esperando estudiantes…</p>`
+    : students.map(s => {
+        const pct = s.total > 0 ? Math.round(s.answered / s.total * 100) : 0;
+        return `<div class="eval-student-row">
+          <div style="min-width:140px;font-weight:600">${_esc(s.name)}</div>
+          <div style="font-size:12px;color:var(--muted);min-width:80px">${_esc(s.rut)}</div>
+          <div class="eval-prog-bar"><div class="eval-prog-fill" style="width:${pct}%"></div></div>
+          <div style="font-size:13px;color:var(--muted);min-width:60px;text-align:right">${s.answered}/${s.total}</div>
+          <div style="min-width:80px;text-align:right">${s.submitted ? '<span style="color:var(--accent2);font-size:12px;font-weight:700">✓ Enviado</span>' : '<span style="font-size:12px;color:var(--muted)">En curso</span>'}</div>
+        </div>`;
+      }).join('');
+}
+
+function hideEvalMonitor() {
+  if (_monitorSocket) { _monitorSocket.disconnect(); _monitorSocket = null; }
+  document.getElementById('eval-list').classList.remove('hidden');
+  document.getElementById('eval-monitor').classList.add('hidden');
+}
+
+async function closeEvaluation() {
+  if (!confirm('¿Cerrar la evaluación? Los alumnos no podrán enviar más respuestas.')) return;
+  try {
+    await authFetch(`${API}/evaluations/${_monitorEvalId}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'closed' }) });
+    if (_monitorSocket) _monitorSocket.emit('eval:close', { code: _monitorCode, token: _token });
+    hideEvalMonitor();
+    loadEvals();
+  } catch { toast('Error cerrando', true); }
+}
+
+async function viewEvalResults(id) {
+  try {
+    const res = await authFetch(`${API}/evaluations/${id}/results`);
+    const data = await res.json();
+    const { evaluation: ev, submissions, questions } = data;
+
+    document.getElementById('eval-list').classList.add('hidden');
+    document.getElementById('eval-results').classList.remove('hidden');
+    document.getElementById('results-title').textContent = ev.title;
+    document.getElementById('results-title').dataset.evalId = id;
+
+    const passScore = Math.round(ev.pass_percentage / 100 * questions.length);
+
+    document.getElementById('results-table').innerHTML = `
+      <thead><tr>
+        <th>RUT</th><th>Nombre</th><th>Correctas</th><th>% Logro</th><th>Nota</th><th>Estado</th><th>Tiempo</th>
+      </tr></thead>
+      <tbody>
+        ${submissions.map(s => {
+          const pct = s.total_count > 0 ? Math.round(s.correct_count / s.total_count * 100) : 0;
+          const passed = s.correct_count >= passScore;
+          const mins = Math.round((s.time_used || 0) / 60);
+          return `<tr>
+            <td style="font-family:monospace;font-size:13px">${_esc(s.student_rut)}</td>
+            <td style="font-weight:600">${_esc(s.student_name)}</td>
+            <td style="text-align:center">${s.correct_count} / ${s.total_count}</td>
+            <td style="text-align:center;font-weight:700">${pct}%</td>
+            <td style="text-align:center;font-weight:800;font-size:16px;color:${passed ? 'var(--success)' : 'var(--danger)'}">${s.grade != null ? s.grade.toFixed(1) : '-'}</td>
+            <td><span class="pass-badge ${passed ? 'pass-yes' : 'pass-no'}">${passed ? 'Aprobado' : 'Reprobado'}</span></td>
+            <td style="font-size:13px;color:var(--muted)">${mins} min</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    `;
+
+    const qStats = questions.map((q, qi) => {
+      const tallyMap = {};
+      submissions.forEach(s => {
+        const ans = s.answers.find(a => a.questionId === q.id);
+        if (ans) tallyMap[ans.answerIndex] = (tallyMap[ans.answerIndex] || 0) + 1;
+      });
+      const total = Object.values(tallyMap).reduce((a,b) => a+b, 0) || 1;
+      const correctCount = tallyMap[q.correct_index] || 0;
+      const wrongPct = Math.round((1 - correctCount/total) * 100);
+      return { q, tallyMap, total, correctCount, wrongPct };
+    }).sort((a,b) => b.wrongPct - a.wrongPct);
+
+    document.getElementById('results-stats').innerHTML = `
+      <h4 style="font-size:15px;font-weight:700;margin-bottom:12px">Preguntas por dificultad</h4>
+      ${qStats.map(({ q, tallyMap, total, correctCount, wrongPct }, i) => {
+        const opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+        return `<div class="card" style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
+            <div style="font-size:14px;font-weight:600;flex:1">${i+1}. ${_esc(q.text)}</div>
+            <div style="font-size:13px;font-weight:800;color:${wrongPct>50?'var(--danger)':'var(--success)'}">❌ ${wrongPct}%</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${opts.map((opt, j) => {
+              const count = tallyMap[j] || 0;
+              const pct = Math.round(count/total*100);
+              const isCorrect = j === q.correct_index;
+              return `<div style="display:flex;align-items:center;gap:8px;font-size:13px">
+                <span style="min-width:20px;font-weight:700;color:${isCorrect?'var(--success)':''}">${['A','B','C','D'][j]}</span>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
+                  <div style="height:100%;background:${isCorrect?'#4CAF50':['#E63946','#2196F3','#FF9800','#4CAF50'][j]};border-radius:4px;width:${pct}%;transition:width .5s"></div>
+                </div>
+                <span style="min-width:32px;text-align:right;color:var(--muted)">${count}</span>
+                ${isCorrect ? '<span style="color:var(--success);font-size:11px">✓</span>' : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    `;
+  } catch(e) { toast('Error cargando resultados', true); }
+}
+
+function hideEvalResults() {
+  document.getElementById('eval-list').classList.remove('hidden');
+  document.getElementById('eval-results').classList.add('hidden');
+}
+
+async function exportEvalCsv() {
+  const id = document.getElementById('results-title').dataset.evalId;
+  if (!id) return;
+  window.open(`${API}/evaluations/${id}/results/csv?token=${encodeURIComponent(_token)}`, '_blank');
 }
 
 function spawnAdminReaction(emoji, playerName) {
