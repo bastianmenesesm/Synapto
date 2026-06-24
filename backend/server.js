@@ -510,6 +510,14 @@ app.put('/api/evaluations/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.delete('/api/evaluations/:id/submissions', requireAuth, (req, res) => {
+  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!ev) return res.status(404).json({ error: 'No encontrada' });
+  if (ev.status === 'open') return res.status(400).json({ error: 'No se puede limpiar una evaluación abierta' });
+  db.prepare('DELETE FROM evaluation_submissions WHERE evaluation_id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 app.delete('/api/evaluations/:id', requireAuth, (req, res) => {
   const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });

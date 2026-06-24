@@ -843,6 +843,7 @@ Opción 4</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="hideEvalStats()">← Volver</button>
           <h3 style="font-size:18px;font-weight:700" id="eval-stats-title"></h3>
+          <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="clearEvalSubmissions(document.getElementById('eval-stats-title').dataset.evalId, 'stats')">🗑 Limpiar entregas</button>
         </div>
         <div id="eval-stats-summary" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px"></div>
         <div id="eval-stats-questions"></div>
@@ -856,6 +857,7 @@ Opción 4</div>
           <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="reopenEvaluation()" id="btn-reopen-eval">↩️ Reabrir</button>
             <button class="btn btn-ghost btn-sm" onclick="exportEvalCsv()">⬇️ Exportar CSV</button>
+            <button class="btn btn-danger btn-sm" onclick="clearEvalSubmissions(document.getElementById('results-title').dataset.evalId, 'results')">🗑 Limpiar</button>
           </div>
         </div>
         <div id="results-summary-wrap" style="margin-bottom:16px"></div>
@@ -3548,6 +3550,18 @@ function hideEvalStats() {
   document.getElementById('eval-list').classList.remove('hidden');
   document.getElementById('eval-stats-view').classList.add('hidden');
   renderEvalList();
+}
+
+async function clearEvalSubmissions(id, from) {
+  if (!id) return;
+  if (!confirm('¿Eliminar todas las entregas de esta evaluación? Esta acción no se puede deshacer.')) return;
+  try {
+    const res = await authFetch(`${API}/evaluations/${id}/submissions`, { method: 'DELETE' });
+    if (!res.ok) { const e = await res.json(); toast(e.error || 'Error', true); return; }
+    toast('Entregas eliminadas ✓');
+    if (from === 'stats') viewEvalStats(id);
+    else viewEvalResults(id);
+  } catch { toast('Error al limpiar', true); }
 }
 
 // ── Eval Import ───────────────────────────────────────────────────────────────
