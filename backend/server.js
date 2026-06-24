@@ -561,6 +561,18 @@ app.get('/api/evaluations/:id/results', requireAuth, (req, res) => {
   res.json({ evaluation: ev, submissions, questions });
 });
 
+// Get single student submission detail
+app.get('/api/evaluations/:id/submissions/:subId', requireAuth, (req, res) => {
+  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!ev) return res.status(404).json({ error: 'No encontrada' });
+  const sub = db.prepare('SELECT * FROM evaluation_submissions WHERE id = ? AND evaluation_id = ?').get(req.params.subId, req.params.id);
+  if (!sub) return res.status(404).json({ error: 'Entrega no encontrada' });
+  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  questions.forEach(q => { try { q.options = JSON.parse(q.options); } catch { q.options = []; } });
+  try { sub.answers = JSON.parse(sub.answers); } catch { sub.answers = []; }
+  res.json({ sub, questions });
+});
+
 app.get('/api/evaluations/:id/results/csv', (req, res) => {
   let userId;
   try {
@@ -1029,13 +1041,18 @@ io.on('connection', (socket) => {
     const questionOrder = answersArr.map(a => a.questionId);
 
     db.prepare('INSERT INTO evaluation_submissions (id, evaluation_id, student_name, student_rut, answers, question_order, correct_count, total_count, grade, time_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      uuidv4(), session.evalId, student.name, student.rut,
+      submissionId, session.evalId, student.name, student.rut,
       JSON.stringify(answersArr), JSON.stringify(questionOrder),
       correctCount, totalCount, grade, timeUsed
     );
 
+    const submissionId = uuidv4();
     student.submitted = true;
     student.answered = Object.keys(student.answers).length;
+    student.correctCount = correctCount;
+    student.totalCount = totalCount;
+    student.grade = grade;
+    student.submissionId = submissionId;
 
     socket.emit('eval:result', { correctCount, totalCount, grade });
     io.to(`eval:admin:${code}`).emit('eval:progress', { students: _getEvalStudentList(session) });
@@ -1072,7 +1089,10 @@ function _getEvalStudentList(session) {
   return Object.values(session.students).map(s => ({
     name: s.name, rut: s.rut,
     answered: s.answered, total: s.total,
-    submitted: s.submitted
+    submitted: s.submitted,
+    correctCount: s.correctCount ?? null,
+    grade: s.grade ?? null,
+    submissionId: s.submissionId ?? null
   }));
 }
 

@@ -3011,18 +3011,85 @@ function renderMonitorStudents(students) {
   document.getElementById('monitor-submitted').textContent = submitted;
   document.getElementById('monitor-active').textContent = active;
 
-  document.getElementById('monitor-students').innerHTML = students.length === 0
-    ? `<p style="color:var(--muted);text-align:center;padding:24px">Esperando estudiantes…</p>`
-    : students.map(s => {
-        const pct = s.total > 0 ? Math.round(s.answered / s.total * 100) : 0;
-        return `<div class="eval-student-row">
-          <div style="min-width:140px;font-weight:600">${_esc(s.name)}</div>
-          <div style="font-size:12px;color:var(--muted);min-width:80px">${_esc(s.rut)}</div>
-          <div class="eval-prog-bar"><div class="eval-prog-fill" style="width:${pct}%"></div></div>
-          <div style="font-size:13px;color:var(--muted);min-width:60px;text-align:right">${s.answered}/${s.total}</div>
-          <div style="min-width:80px;text-align:right">${s.submitted ? '<span style="color:var(--accent2);font-size:12px;font-weight:700">✓ Enviado</span>' : '<span style="font-size:12px;color:var(--muted)">En curso</span>'}</div>
+  if (!students.length) {
+    document.getElementById('monitor-students').innerHTML = `<p style="color:var(--muted);text-align:center;padding:24px">Esperando estudiantes…</p>`;
+    return;
+  }
+
+  document.getElementById('monitor-students').innerHTML = students.map((s, i) => {
+    const pct = s.total > 0 ? Math.round(s.answered / s.total * 100) : 0;
+    const detailId = `detail-${s.submissionId || i}`;
+    return `<div class="eval-student-row" style="flex-wrap:wrap;gap:8px">
+      <div style="min-width:130px;font-weight:700">${_esc(s.name)}</div>
+      <div style="font-size:12px;color:var(--muted);min-width:100px;font-family:monospace">${_esc(s.rut)}</div>
+      ${s.submitted ? `
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:180px">
+          <div class="eval-prog-bar" style="flex:1"><div class="eval-prog-fill" style="width:100%"></div></div>
+          <span style="font-size:13px;font-weight:700;color:var(--accent2);white-space:nowrap">${s.correctCount ?? 0}/${s.total} ✓</span>
+          ${s.grade != null ? `<span style="font-size:14px;font-weight:800;min-width:36px;text-align:right">${s.grade.toFixed(1)}</span>` : ''}
+        </div>
+        <span style="color:var(--accent2);font-size:12px;font-weight:700;white-space:nowrap">✓ Enviado</span>
+        ${s.submissionId ? `<button class="btn btn-ghost btn-sm" onclick="toggleStudentDetail('${s.submissionId}','${detailId}',this)" style="padding:4px 10px;font-size:12px">Ver detalle ▼</button>` : ''}
+      ` : `
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:180px">
+          <div class="eval-prog-bar" style="flex:1"><div class="eval-prog-fill" style="width:${pct}%"></div></div>
+          <span style="font-size:12px;color:var(--muted);white-space:nowrap">${s.answered}/${s.total}</span>
+        </div>
+        <span style="font-size:12px;color:var(--muted)">En curso</span>
+      `}
+      <div id="${detailId}" style="display:none;width:100%;margin-top:4px"></div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleStudentDetail(submissionId, detailId, btn) {
+  const detailEl = document.getElementById(detailId);
+  if (!detailEl) return;
+  if (detailEl.style.display !== 'none') {
+    detailEl.style.display = 'none';
+    btn.textContent = 'Ver detalle ▼';
+    return;
+  }
+  btn.textContent = 'Cargando…';
+  btn.disabled = true;
+  try {
+    const res = await apiFetch(`/api/evaluations/${_monitorEvalId}/submissions/${submissionId}`);
+    const { sub, questions } = await res.json();
+    const letters = ['A','B','C','D'];
+    const optColors = ['#E63946','#2196F3','#FF9800','#4CAF50'];
+    detailEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      ${questions.map((q, qi) => {
+        const ans = sub.answers.find(a => a.questionId === q.id);
+        const myIdx = ans != null ? parseInt(ans.answerIndex) : -1;
+        const correct = myIdx === q.correct_index;
+        const borderColor = correct ? '#4CAF50' : myIdx === -1 ? 'var(--border)' : '#E63946';
+        const label = correct ? '✅ Correcta' : myIdx === -1 ? '— Sin responder' : '❌ Incorrecta';
+        const labelColor = correct ? '#4CAF50' : myIdx === -1 ? 'var(--muted)' : '#E63946';
+        return `<div style="border-left:3px solid ${borderColor};padding-left:10px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px;color:${labelColor}">${qi+1}. ${label}</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px">${_esc(q.text)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${q.options.map((opt, oi) => {
+              const isCorrect = oi === q.correct_index;
+              const isMine = oi === myIdx;
+              const bg = isCorrect ? 'rgba(76,175,80,.15)' : isMine ? 'rgba(230,57,70,.1)' : 'transparent';
+              const border = isCorrect ? '1px solid #4CAF50' : isMine ? '1px solid #E63946' : '1px solid var(--border)';
+              const color = isCorrect ? '#4CAF50' : isMine ? '#E63946' : 'var(--muted)';
+              return `<span style="padding:3px 10px;border-radius:6px;font-size:12px;background:${bg};border:${border};color:${color}">
+                <b style="color:${optColors[oi]}">${letters[oi]}</b> ${_esc(opt)}${isCorrect ? ' ✓' : ''}${isMine && !isCorrect ? ' ✗' : ''}
+              </span>`;
+            }).join('')}
+          </div>
         </div>`;
-      }).join('');
+      }).join('')}
+    </div>`;
+    detailEl.style.display = 'block';
+    btn.textContent = 'Cerrar ▲';
+  } catch(e) {
+    toast('Error cargando detalle', true);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function hideEvalMonitor() {
