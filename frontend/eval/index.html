@@ -66,6 +66,32 @@
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 20px; }
     .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; max-width: 360px; width: 100%; }
+
+    /* Floating submit button for mobile */
+    .fab-submit { display: none; }
+    @media (max-width: 600px) {
+      .fab-submit {
+        display: flex;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 50;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 22px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 50px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 4px 20px rgba(124,92,252,.5);
+        transition: opacity .2s, transform .2s;
+      }
+      .fab-submit:disabled { opacity: .4; pointer-events: none; }
+      .fab-submit:active { transform: scale(.96); }
+    }
   </style>
 </head>
 <body>
@@ -114,6 +140,8 @@
       <button class="btn btn-ghost" style="flex:1" onclick="goQuestion(currentQ + 1)">Siguiente →</button>
     </div>
   </div>
+  <!-- Floating submit button (visible only on mobile) -->
+  <button class="fab-submit" id="fab-submit" onclick="confirmSubmit()">Enviar →</button>
 </div>
 
 <!-- RESULT -->
@@ -407,10 +435,18 @@ function confirmSubmit() {
   document.getElementById('modal-confirm').classList.remove('hidden');
 }
 
+function _setSubmitDisabled(val) {
+  const btn = document.querySelector('.btn-submit-eval');
+  const fab = document.getElementById('fab-submit');
+  if (btn) btn.disabled = val;
+  if (fab) fab.disabled = val;
+}
+
 function doSubmit() {
   document.getElementById('modal-confirm').classList.add('hidden');
   if (!socket || _submitted) return;
   _submitted = true;
+  _setSubmitDisabled(true);
   clearInterval(_timerInterval);
   const answersArr = Object.entries(_answers).map(([questionId, answerIndex]) => ({ questionId, answerIndex }));
   socket.emit('eval:submit', { answers: answersArr });
@@ -420,8 +456,7 @@ function doSubmit() {
     if (_submitted && document.getElementById('s-eval') && !document.getElementById('s-eval').classList.contains('hidden')) {
       _submitted = false;
       startTimer();
-      const btn = document.querySelector('.btn-submit-eval');
-      if (btn) btn.disabled = false;
+      _setSubmitDisabled(false);
     }
   }, 8000);
 }

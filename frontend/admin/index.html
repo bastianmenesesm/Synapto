@@ -875,12 +875,12 @@ Opción 4</div>
 
 <!-- Eval Import modal -->
 <div id="modal-eval-import" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeEvalImport()">
-  <div class="modal" style="max-width:560px;padding:0;overflow:hidden">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)">
+  <div class="modal" style="max-width:560px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border);flex-shrink:0">
       <h2 style="font-size:18px;font-weight:800;margin:0">⬆️ Importar preguntas</h2>
       <button onclick="closeEvalImport()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">✕</button>
     </div>
-    <div style="padding:20px 24px">
+    <div style="padding:20px 24px;overflow-y:auto;flex:1">
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <button class="import-tab-btn active" id="eval-tab-text" onclick="switchEvalImportTab('text',this)">Texto</button>
         <button class="import-tab-btn" id="eval-tab-csv" onclick="switchEvalImportTab('csv',this)">CSV</button>
