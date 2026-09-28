@@ -23,49 +23,124 @@ const io = new Server(server, {
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json());
 
+// ─── Async helpers ──────────────────────────────────────────────────────────────
+// Wraps an async Express handler so rejected promises hit the error middleware
+// instead of crashing the process or hanging the request.
+function ah(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+}
+// Wraps an async Socket.IO handler so rejected promises are logged, not thrown.
+function sh(fn) {
+  return (...args) => Promise.resolve(fn(...args)).catch(err => console.error('Socket handler error:', err));
+}
+
 // ─── Migrations ───────────────────────────────────────────────────────────────
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role TEXT DEFAULT 'user',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`); } catch {}
-try { db.exec(`ALTER TABLE quizzes ADD COLUMN user_id TEXT`); } catch {}
-db.exec(`
-  CREATE TABLE IF NOT EXISTS game_results (
-    id TEXT PRIMARY KEY,
-    quiz_id TEXT NOT NULL,
-    played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    player_count INTEGER DEFAULT 0,
-    avg_score REAL DEFAULT 0,
-    question_tallies TEXT DEFAULT '[]'
-  );
-`);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS active_games (
-    code TEXT PRIMARY KEY,
-    quiz_id TEXT NOT NULL,
-    status TEXT DEFAULT 'lobby',
-    current_question INTEGER DEFAULT -1,
-    question_count INTEGER DEFAULT 0,
-    players TEXT DEFAULT '[]',
-    question_tallies TEXT DEFAULT '[]',
-    join_url TEXT,
-    last_reveal TEXT,
-    last_ranking TEXT,
-    team_mode INTEGER DEFAULT 0,
-    teams TEXT DEFAULT '[]',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-try { db.exec(`ALTER TABLE active_games ADD COLUMN team_mode INTEGER DEFAULT 0`); } catch {}
-try { db.exec(`ALTER TABLE active_games ADD COLUMN teams TEXT DEFAULT '[]'`); } catch {}
-try { db.exec('ALTER TABLE evaluations ADD COLUMN code TEXT'); } catch {}
+async function runMigrations() {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  try { await db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`); } catch {}
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS quizzes (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS questions (
+      id TEXT PRIMARY KEY,
+      quiz_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      options TEXT NOT NULL,
+      correct_index INTEGER NOT NULL,
+      time_limit INTEGER DEFAULT 20,
+      position INTEGER DEFAULT 0,
+      tag TEXT DEFAULT NULL,
+      FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
+    );
+  `);
+  try { await db.exec(`ALTER TABLE questions ADD COLUMN tag TEXT DEFAULT NULL`); } catch {}
+  try { await db.exec(`ALTER TABLE quizzes ADD COLUMN user_id TEXT`); } catch {}
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS evaluations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      time_limit INTEGER NOT NULL DEFAULT 90,
+      grade_min REAL DEFAULT 1.0,
+      grade_max REAL DEFAULT 7.0,
+      pass_percentage INTEGER DEFAULT 60,
+      status TEXT DEFAULT 'draft',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS evaluation_questions (
+      id TEXT PRIMARY KEY,
+      evaluation_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      options TEXT NOT NULL,
+      correct_index INTEGER NOT NULL,
+      position INTEGER DEFAULT 0,
+      tag TEXT DEFAULT NULL,
+      FOREIGN KEY (evaluation_id) REFERENCES evaluations(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS evaluation_submissions (
+      id TEXT PRIMARY KEY,
+      evaluation_id TEXT NOT NULL,
+      student_name TEXT NOT NULL,
+      student_rut TEXT NOT NULL,
+      answers TEXT NOT NULL DEFAULT '[]',
+      question_order TEXT NOT NULL DEFAULT '[]',
+      correct_count INTEGER DEFAULT 0,
+      total_count INTEGER DEFAULT 0,
+      grade REAL DEFAULT NULL,
+      submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      time_used INTEGER DEFAULT 0
+    );
+  `);
+  try { await db.exec(`ALTER TABLE evaluations ADD COLUMN tags TEXT DEFAULT NULL`); } catch {}
+  try { await db.exec(`ALTER TABLE evaluations ADD COLUMN code TEXT`); } catch {}
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS game_results (
+      id TEXT PRIMARY KEY,
+      quiz_id TEXT NOT NULL,
+      played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      player_count INTEGER DEFAULT 0,
+      avg_score REAL DEFAULT 0,
+      question_tallies TEXT DEFAULT '[]'
+    );
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS active_games (
+      code TEXT PRIMARY KEY,
+      quiz_id TEXT NOT NULL,
+      status TEXT DEFAULT 'lobby',
+      current_question INTEGER DEFAULT -1,
+      question_count INTEGER DEFAULT 0,
+      players TEXT DEFAULT '[]',
+      question_tallies TEXT DEFAULT '[]',
+      join_url TEXT,
+      last_reveal TEXT,
+      last_ranking TEXT,
+      team_mode INTEGER DEFAULT 0,
+      teams TEXT DEFAULT '[]',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  try { await db.exec(`ALTER TABLE active_games ADD COLUMN team_mode INTEGER DEFAULT 0`); } catch {}
+  try { await db.exec(`ALTER TABLE active_games ADD COLUMN teams TEXT DEFAULT '[]'`); } catch {}
+}
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
@@ -79,38 +154,38 @@ function requireAuth(req, res, next) {
   }
 }
 
-function requireAdmin(req, res, next) {
-  const row = db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+const requireAdmin = ah(async (req, res, next) => {
+  const row = await db.get('SELECT role FROM users WHERE id = ?', [req.user.id]);
   if (row?.role !== 'admin') return res.status(403).json({ error: 'Acceso denegado' });
   next();
-}
+});
 
 // ─── Auth routes ──────────────────────────────────────────────────────────────
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', ah(async (req, res) => {
   const { name, email, password } = req.body;
   if (!name?.trim() || !email?.trim() || !password) return res.status(400).json({ error: 'Todos los campos son requeridos' });
   if (password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email inválido' });
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim());
+  const existing = await db.get('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()]);
   if (existing) return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
 
   const id = uuidv4();
   const hash = await bcrypt.hash(password, 12);
-  db.prepare('INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)').run(
+  await db.run('INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)', [
     id, name.trim(), email.toLowerCase().trim(), hash, 'user'
-  );
+  ]);
 
   const user = { id, name: name.trim(), email: email.toLowerCase().trim(), role: 'user' };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user });
-});
+}));
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', ah(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
 
-  const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
+  const row = await db.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()]);
   if (!row) return res.status(401).json({ error: 'Email o contraseña incorrectos' });
 
   const valid = await bcrypt.compare(password, row.password_hash);
@@ -119,17 +194,17 @@ app.post('/api/auth/login', async (req, res) => {
   const user = { id: row.id, name: row.name, email: row.email, role: row.role || 'user' };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user });
-});
+}));
 
-app.get('/api/auth/me', requireAuth, (req, res) => {
-  const row = db.prepare('SELECT id, name, email, role, created_at FROM users WHERE id = ?').get(req.user.id);
+app.get('/api/auth/me', requireAuth, ah(async (req, res) => {
+  const row = await db.get('SELECT id, name, email, role, created_at FROM users WHERE id = ?', [req.user.id]);
   if (!row) return res.status(404).json({ error: 'Usuario no encontrado' });
   res.json(row);
-});
+}));
 
-app.put('/api/auth/profile', requireAuth, async (req, res) => {
+app.put('/api/auth/profile', requireAuth, ah(async (req, res) => {
   const { name, currentPassword, newPassword } = req.body;
-  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const row = await db.get('SELECT * FROM users WHERE id = ?', [req.user.id]);
   if (!row) return res.status(404).json({ error: 'Usuario no encontrado' });
 
   if (newPassword) {
@@ -138,46 +213,48 @@ app.put('/api/auth/profile', requireAuth, async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
     if (newPassword.length < 8) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
     const hash = await bcrypt.hash(newPassword, 12);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
+    await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.id]);
   }
 
   const newName = name?.trim() || row.name;
-  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(newName, req.user.id);
+  await db.run('UPDATE users SET name = ? WHERE id = ?', [newName, req.user.id]);
 
   const user = { id: row.id, name: newName, email: row.email, role: row.role || 'user' };
   const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user });
-});
+}));
 
 // ─── Admin: user management ───────────────────────────────────────────────────
-app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
-  const users = db.prepare(`
+app.get('/api/admin/users', requireAuth, requireAdmin, ah(async (req, res) => {
+  const users = await db.all(`
     SELECT u.id, u.name, u.email, u.role, u.created_at,
            COUNT(q.id) as quiz_count
     FROM users u
     LEFT JOIN quizzes q ON q.user_id = u.id
     GROUP BY u.id
     ORDER BY u.created_at ASC
-  `).all();
+  `);
   res.json(users);
-});
+}));
 
-app.put('/api/admin/users/:id/role', requireAuth, requireAdmin, (req, res) => {
+app.put('/api/admin/users/:id/role', requireAuth, requireAdmin, ah(async (req, res) => {
   const { role } = req.body;
   if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'Rol inválido' });
   if (req.params.id === req.user.id) return res.status(400).json({ error: 'No podés cambiar tu propio rol' });
-  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+  await db.run('UPDATE users SET role = ? WHERE id = ?', [role, req.params.id]);
   res.json({ ok: true });
-});
+}));
 
-app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, ah(async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: 'No podés eliminar tu propia cuenta' });
-  const quizzes = db.prepare('SELECT id FROM quizzes WHERE user_id = ?').all(req.params.id);
-  quizzes.forEach(q => db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(q.id));
-  db.prepare('DELETE FROM quizzes WHERE user_id = ?').run(req.params.id);
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  const quizzes = await db.all('SELECT id FROM quizzes WHERE user_id = ?', [req.params.id]);
+  for (const q of quizzes) {
+    await db.run('DELETE FROM questions WHERE quiz_id = ?', [q.id]);
+  }
+  await db.run('DELETE FROM quizzes WHERE user_id = ?', [req.params.id]);
+  await db.run('DELETE FROM users WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
-});
+}));
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TEAM_COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c'];
@@ -228,29 +305,31 @@ function getTeamRanking(game) {
     .map((t, i) => ({ ...t, rank: i + 1 }));
 }
 
-function persistGame(code) {
+async function persistGame(code) {
   const game = games[code];
   if (!game) return;
-  const players = Object.values(game.players).map(p => ({
-    name: p.name, emoji: p.emoji, score: p.score, streak: p.streak || 0, teamId: p.teamId || null
-  }));
-  db.prepare(`INSERT OR REPLACE INTO active_games
-    (code, quiz_id, status, current_question, question_count, players, question_tallies, join_url, last_reveal, last_ranking, team_mode, teams, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-  `).run(
-    code, game.quizId, game.status, game.currentQuestion, game.questionCount || 0,
-    JSON.stringify(players), JSON.stringify(game.questionTallies), game.joinUrl || null,
-    game.lastReveal ? JSON.stringify(game.lastReveal) : null,
-    game.lastRanking ? JSON.stringify(game.lastRanking) : null,
-    game.teamMode ? 1 : 0, JSON.stringify(game.teams || [])
-  );
+  try {
+    const players = Object.values(game.players).map(p => ({
+      name: p.name, emoji: p.emoji, score: p.score, streak: p.streak || 0, teamId: p.teamId || null
+    }));
+    await db.run(`INSERT OR REPLACE INTO active_games
+      (code, quiz_id, status, current_question, question_count, players, question_tallies, join_url, last_reveal, last_ranking, team_mode, teams, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, [
+      code, game.quizId, game.status, game.currentQuestion, game.questionCount || 0,
+      JSON.stringify(players), JSON.stringify(game.questionTallies), game.joinUrl || null,
+      game.lastReveal ? JSON.stringify(game.lastReveal) : null,
+      game.lastRanking ? JSON.stringify(game.lastRanking) : null,
+      game.teamMode ? 1 : 0, JSON.stringify(game.teams || [])
+    ]);
+  } catch (e) { console.warn('persistGame error:', e.message); }
 }
 
-function loadActiveGames() {
+async function loadActiveGames() {
   try {
-    const rows = db.prepare(
+    const rows = await db.all(
       `SELECT * FROM active_games WHERE updated_at > datetime('now', '-12 hours')`
-    ).all();
+    );
     rows.forEach(row => {
       const players = JSON.parse(row.players || '[]');
       const playersMap = {};
@@ -277,30 +356,28 @@ function loadActiveGames() {
   } catch (e) { console.warn('loadActiveGames error:', e.message); }
 }
 
-loadActiveGames();
-
 // ─── REST API ─────────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-app.get('/api/quizzes', requireAuth, (req, res) => {
-  const quizzes = db.prepare(`
+app.get('/api/quizzes', requireAuth, ah(async (req, res) => {
+  const quizzes = await db.all(`
     SELECT q.*, COUNT(qs.id) as question_count
     FROM quizzes q
     LEFT JOIN questions qs ON q.id = qs.quiz_id
     WHERE q.user_id = ?
     GROUP BY q.id
     ORDER BY q.created_at DESC
-  `).all(req.user.id);
+  `, [req.user.id]);
   res.json(quizzes);
-});
+}));
 
-app.get('/api/quizzes/:id', requireAuth, (req, res) => {
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.get('/api/quizzes/:id', requireAuth, ah(async (req, res) => {
+  const quiz = await db.get('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
-  const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(quiz.id);
+  const questions = await db.all('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position', [quiz.id]);
   questions.forEach(q => { q.options = JSON.parse(q.options); });
   res.json({ ...quiz, questions });
-});
+}));
 
 function validateQuestions(questions) {
   if (!Array.isArray(questions) || questions.length === 0) return 'Se requiere al menos una pregunta';
@@ -314,64 +391,66 @@ function validateQuestions(questions) {
   return null;
 }
 
-app.post('/api/quizzes', requireAuth, (req, res) => {
+app.post('/api/quizzes', requireAuth, ah(async (req, res) => {
   const { title, questions } = req.body;
   if (!title) return res.status(400).json({ error: 'Título requerido' });
   const err = validateQuestions(questions);
   if (err) return res.status(400).json({ error: err });
 
   const id = uuidv4();
-  db.prepare('INSERT INTO quizzes (id, title, user_id) VALUES (?, ?, ?)').run(id, title, req.user.id);
+  await db.run('INSERT INTO quizzes (id, title, user_id) VALUES (?, ?, ?)', [id, title, req.user.id]);
 
-  const insertQ = db.prepare(`
+  const insertSql = `
     INSERT INTO questions (id, quiz_id, text, options, correct_index, time_limit, position, tag)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  questions.forEach((q, i) => {
-    insertQ.run(uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i, q.tag?.trim() || null);
-  });
+  `;
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    await db.run(insertSql, [uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i, q.tag?.trim() || null]);
+  }
 
   res.json({ id });
-});
+}));
 
-app.put('/api/quizzes/:id', requireAuth, (req, res) => {
+app.put('/api/quizzes/:id', requireAuth, ah(async (req, res) => {
   const { title, questions } = req.body;
   if (!title) return res.status(400).json({ error: 'Título requerido' });
   const err = validateQuestions(questions);
   if (err) return res.status(400).json({ error: err });
 
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  const quiz = await db.get('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
 
-  db.prepare('UPDATE quizzes SET title = ? WHERE id = ?').run(title, req.params.id);
-  db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
+  await db.run('UPDATE quizzes SET title = ? WHERE id = ?', [title, req.params.id]);
+  await db.run('DELETE FROM questions WHERE quiz_id = ?', [req.params.id]);
 
-  const insertQ = db.prepare(`
+  const insertSql = `
     INSERT INTO questions (id, quiz_id, text, options, correct_index, time_limit, position, tag)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  questions.forEach((q, i) => {
-    insertQ.run(uuidv4(), req.params.id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i, q.tag?.trim() || null);
-  });
+  `;
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    await db.run(insertSql, [uuidv4(), req.params.id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), q.timeLimit || 20, i, q.tag?.trim() || null]);
+  }
 
   res.json({ ok: true });
-});
+}));
 
-app.delete('/api/quizzes/:id', requireAuth, (req, res) => {
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.delete('/api/quizzes/:id', requireAuth, ah(async (req, res) => {
+  const quiz = await db.get('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
-  db.prepare('DELETE FROM game_results WHERE quiz_id = ?').run(req.params.id);
-  db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
-  db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
+  await db.run('DELETE FROM game_results WHERE quiz_id = ?', [req.params.id]);
+  await db.run('DELETE FROM questions WHERE quiz_id = ?', [req.params.id]);
+  await db.run('DELETE FROM quizzes WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
-});
+}));
 
-app.get('/api/quizzes/:id/stats', requireAuth, (req, res) => {
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.get('/api/quizzes/:id/stats', requireAuth, ah(async (req, res) => {
+  const quiz = await db.get('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
 
-  const results = db.prepare('SELECT * FROM game_results WHERE quiz_id = ? ORDER BY played_at DESC').all(req.params.id);
-  const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(req.params.id);
+  const results = await db.all('SELECT * FROM game_results WHERE quiz_id = ? ORDER BY played_at DESC', [req.params.id]);
+  const questions = await db.all('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position', [req.params.id]);
 
   if (!results.length) return res.json({ playCount: 0, avgScore: 0, avgPlayers: 0, mostMissedQuestion: null, recentGames: [], allQuestions: [] });
 
@@ -433,11 +512,11 @@ app.get('/api/quizzes/:id/stats', requireAuth, (req, res) => {
   }));
 
   res.json({ playCount, avgScore, avgPlayers, mostMissedQuestion, recentGames, allQuestions });
-});
+}));
 
-app.post('/api/games', requireAuth, async (req, res) => {
+app.post('/api/games', requireAuth, ah(async (req, res) => {
   const { quizId, baseUrl, teamMode, teams } = req.body;
-  const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?').get(quizId, req.user.id);
+  const quiz = await db.get('SELECT * FROM quizzes WHERE id = ? AND user_id = ?', [quizId, req.user.id]);
   if (!quiz) return res.status(404).json({ error: 'Quiz no encontrado' });
 
   let code;
@@ -463,7 +542,7 @@ app.post('/api/games', requireAuth, async (req, res) => {
   }
 
   res.json({ code, joinUrl, qr: qrDataUrl, teamMode: games[code].teamMode, teams: games[code].teams });
-});
+}));
 
 app.get('/api/games/:code', (req, res) => {
   const game = games[req.params.code];
@@ -472,59 +551,65 @@ app.get('/api/games/:code', (req, res) => {
 });
 
 // ─── Evaluations REST API ─────────────────────────────────────────────────────
-app.get('/api/evaluations', requireAuth, (req, res) => {
-  const rows = db.prepare(`SELECT e.*, (SELECT COUNT(*) FROM evaluation_questions WHERE evaluation_id = e.id) as question_count FROM evaluations e WHERE e.user_id = ? ORDER BY e.created_at DESC`).all(req.user.id);
+app.get('/api/evaluations', requireAuth, ah(async (req, res) => {
+  const rows = await db.all(`SELECT e.*, (SELECT COUNT(*) FROM evaluation_questions WHERE evaluation_id = e.id) as question_count FROM evaluations e WHERE e.user_id = ? ORDER BY e.created_at DESC`, [req.user.id]);
   res.json(rows);
-});
+}));
 
-app.post('/api/evaluations', requireAuth, (req, res) => {
+app.post('/api/evaluations', requireAuth, ah(async (req, res) => {
   const { title, timeLimit, gradeMin, gradeMax, passPercentage, questions, tags } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Título requerido' });
   if (!Array.isArray(questions) || questions.length === 0) return res.status(400).json({ error: 'Se requiere al menos una pregunta' });
   const id = uuidv4();
-  db.prepare('INSERT INTO evaluations (id, user_id, title, time_limit, grade_min, grade_max, pass_percentage, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, req.user.id, title.trim(), timeLimit || 90, gradeMin ?? 1.0, gradeMax ?? 7.0, passPercentage ?? 60, tags?.trim() || null);
-  const insertQ = db.prepare('INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  questions.forEach((q, i) => insertQ.run(uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), i, q.tag?.trim() || null));
+  await db.run('INSERT INTO evaluations (id, user_id, title, time_limit, grade_min, grade_max, pass_percentage, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, req.user.id, title.trim(), timeLimit || 90, gradeMin ?? 1.0, gradeMax ?? 7.0, passPercentage ?? 60, tags?.trim() || null]);
+  const insertSql = 'INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    await db.run(insertSql, [uuidv4(), id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), i, q.tag?.trim() || null]);
+  }
   res.json({ id });
-});
+}));
 
-app.get('/api/evaluations/:id', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.get('/api/evaluations/:id', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
-  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  const questions = await db.all('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position', [req.params.id]);
   questions.forEach(q => { try { q.options = JSON.parse(q.options); } catch { q.options = []; } });
   res.json({ ...ev, questions });
-});
+}));
 
-app.put('/api/evaluations/:id', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.put('/api/evaluations/:id', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
   if (ev.status !== 'draft') return res.status(400).json({ error: 'Solo se puede editar en borrador' });
   const { title, timeLimit, gradeMin, gradeMax, passPercentage, questions, tags } = req.body;
-  db.prepare('UPDATE evaluations SET title=?, time_limit=?, grade_min=?, grade_max=?, pass_percentage=?, tags=? WHERE id=?').run(title?.trim() || ev.title, timeLimit || ev.time_limit, gradeMin ?? ev.grade_min, gradeMax ?? ev.grade_max, passPercentage ?? ev.pass_percentage, tags !== undefined ? (tags?.trim() || null) : ev.tags, req.params.id);
+  await db.run('UPDATE evaluations SET title=?, time_limit=?, grade_min=?, grade_max=?, pass_percentage=?, tags=? WHERE id=?', [title?.trim() || ev.title, timeLimit || ev.time_limit, gradeMin ?? ev.grade_min, gradeMax ?? ev.grade_max, passPercentage ?? ev.pass_percentage, tags !== undefined ? (tags?.trim() || null) : ev.tags, req.params.id]);
   if (Array.isArray(questions)) {
-    db.prepare('DELETE FROM evaluation_questions WHERE evaluation_id = ?').run(req.params.id);
-    const insertQ = db.prepare('INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    questions.forEach((q, i) => insertQ.run(uuidv4(), req.params.id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), i, q.tag?.trim() || null));
+    await db.run('DELETE FROM evaluation_questions WHERE evaluation_id = ?', [req.params.id]);
+    const insertSql = 'INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)';
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      await db.run(insertSql, [uuidv4(), req.params.id, q.text.trim(), JSON.stringify(q.options.map(o => o.trim())), parseInt(q.correctIndex, 10), i, q.tag?.trim() || null]);
+    }
   }
   res.json({ ok: true });
-});
+}));
 
-app.delete('/api/evaluations/:id/submissions', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.delete('/api/evaluations/:id/submissions', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
   if (ev.status === 'open') return res.status(400).json({ error: 'No se puede limpiar una evaluación abierta' });
-  db.prepare('DELETE FROM evaluation_submissions WHERE evaluation_id = ?').run(req.params.id);
+  await db.run('DELETE FROM evaluation_submissions WHERE evaluation_id = ?', [req.params.id]);
   res.json({ ok: true });
-});
+}));
 
-app.post('/api/evaluations/:id/reset-student', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.post('/api/evaluations/:id/reset-student', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
   const { rut } = req.body;
   if (!rut) return res.status(400).json({ error: 'RUT requerido' });
   // Delete submission so student can rejoin
-  db.prepare('DELETE FROM evaluation_submissions WHERE evaluation_id = ? AND student_rut = ?').run(req.params.id, rut);
+  await db.run('DELETE FROM evaluation_submissions WHERE evaluation_id = ? AND student_rut = ?', [req.params.id, rut]);
   // Remove from active session in memory so server lets them back in
   const session = Object.values(activeEvals).find(s => s.evalId === req.params.id);
   if (session) {
@@ -532,30 +617,32 @@ app.post('/api/evaluations/:id/reset-student', requireAuth, (req, res) => {
     if (socketId) delete session.students[socketId];
   }
   res.json({ ok: true });
-});
+}));
 
-app.delete('/api/evaluations/:id', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.delete('/api/evaluations/:id', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
-  db.prepare('DELETE FROM evaluation_questions WHERE evaluation_id = ?').run(req.params.id);
-  db.prepare('DELETE FROM evaluation_submissions WHERE evaluation_id = ?').run(req.params.id);
-  db.prepare('DELETE FROM evaluations WHERE id = ?').run(req.params.id);
+  await db.run('DELETE FROM evaluation_questions WHERE evaluation_id = ?', [req.params.id]);
+  await db.run('DELETE FROM evaluation_submissions WHERE evaluation_id = ?', [req.params.id]);
+  await db.run('DELETE FROM evaluations WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
-});
+}));
 
-app.post('/api/evaluations/:id/duplicate', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.post('/api/evaluations/:id/duplicate', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
-  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  const questions = await db.all('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position', [req.params.id]);
   const newId = uuidv4();
-  db.prepare('INSERT INTO evaluations (id, user_id, title, time_limit, grade_min, grade_max, pass_percentage, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(newId, req.user.id, `${ev.title} (copia)`, ev.time_limit, ev.grade_min, ev.grade_max, ev.pass_percentage, ev.tags);
-  const insertQ = db.prepare('INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  questions.forEach(q => insertQ.run(uuidv4(), newId, q.text, q.options, q.correct_index, q.position, q.tag));
+  await db.run('INSERT INTO evaluations (id, user_id, title, time_limit, grade_min, grade_max, pass_percentage, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [newId, req.user.id, `${ev.title} (copia)`, ev.time_limit, ev.grade_min, ev.grade_max, ev.pass_percentage, ev.tags]);
+  const insertSql = 'INSERT INTO evaluation_questions (id, evaluation_id, text, options, correct_index, position, tag) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  for (const q of questions) {
+    await db.run(insertSql, [uuidv4(), newId, q.text, q.options, q.correct_index, q.position, q.tag]);
+  }
   res.json({ id: newId });
-});
+}));
 
-app.patch('/api/evaluations/:id/status', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.patch('/api/evaluations/:id/status', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
   const { status } = req.body;
   if (!['draft','open','closed'].includes(status)) return res.status(400).json({ error: 'Estado inválido' });
@@ -564,9 +651,8 @@ app.patch('/api/evaluations/:id/status', requireAuth, (req, res) => {
     let code;
     do { code = Math.random().toString(36).substring(2, 8).toUpperCase(); } while (activeEvals[code]);
     activeEvals[code] = { evalId: req.params.id, students: {} };
-    db.prepare('UPDATE evaluations SET status=? WHERE id=?').run('open', req.params.id);
-    try { db.exec('ALTER TABLE evaluations ADD COLUMN code TEXT'); } catch {}
-    db.prepare('UPDATE evaluations SET code=? WHERE id=?').run(code, req.params.id);
+    await db.run('UPDATE evaluations SET status=? WHERE id=?', ['open', req.params.id]);
+    await db.run('UPDATE evaluations SET code=? WHERE id=?', [code, req.params.id]);
     return res.json({ ok: true, code });
   }
 
@@ -575,19 +661,19 @@ app.patch('/api/evaluations/:id/status', requireAuth, (req, res) => {
     if (entry) {
       delete activeEvals[entry[0]];
     }
-    db.prepare('UPDATE evaluations SET status=? WHERE id=?').run('closed', req.params.id);
+    await db.run('UPDATE evaluations SET status=? WHERE id=?', ['closed', req.params.id]);
     return res.json({ ok: true });
   }
 
-  db.prepare('UPDATE evaluations SET status=? WHERE id=?').run(status, req.params.id);
+  await db.run('UPDATE evaluations SET status=? WHERE id=?', [status, req.params.id]);
   res.json({ ok: true });
-});
+}));
 
-app.get('/api/evaluations/:id/stats', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.get('/api/evaluations/:id/stats', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
-  const submissions = db.prepare('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? ORDER BY submitted_at').all(req.params.id);
-  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  const submissions = await db.all('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? ORDER BY submitted_at', [req.params.id]);
+  const questions = await db.all('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position', [req.params.id]);
   submissions.forEach(s => { try { s.answers = JSON.parse(s.answers); } catch { s.answers = []; } });
   questions.forEach(q => { try { q.options = JSON.parse(q.options); } catch { q.options = []; } });
   const totalSubs = submissions.length;
@@ -606,43 +692,43 @@ app.get('/api/evaluations/:id/stats', requireAuth, (req, res) => {
     return { id: q.id, text: q.text, options: q.options, correct_index: q.correct_index, tag: q.tag, tallyMap, total, correctCount };
   });
   res.json({ evaluation: ev, totalSubs, passed, avgGrade, avgTime, qStats });
-});
+}));
 
-app.get('/api/evaluations/:id/results', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.get('/api/evaluations/:id/results', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
-  const submissions = db.prepare('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? ORDER BY submitted_at').all(req.params.id);
-  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  const submissions = await db.all('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? ORDER BY submitted_at', [req.params.id]);
+  const questions = await db.all('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position', [req.params.id]);
   submissions.forEach(s => {
     try { s.answers = JSON.parse(s.answers); } catch { s.answers = []; }
     try { s.question_order = JSON.parse(s.question_order); } catch { s.question_order = []; }
   });
   questions.forEach(q => { try { q.options = JSON.parse(q.options); } catch { q.options = []; } });
   res.json({ evaluation: ev, submissions, questions });
-});
+}));
 
 // Get single student submission detail
-app.get('/api/evaluations/:id/submissions/:subId', requireAuth, (req, res) => {
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+app.get('/api/evaluations/:id/submissions/:subId', requireAuth, ah(async (req, res) => {
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
-  const sub = db.prepare('SELECT * FROM evaluation_submissions WHERE id = ? AND evaluation_id = ?').get(req.params.subId, req.params.id);
+  const sub = await db.get('SELECT * FROM evaluation_submissions WHERE id = ? AND evaluation_id = ?', [req.params.subId, req.params.id]);
   if (!sub) return res.status(404).json({ error: 'Entrega no encontrada' });
-  const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(req.params.id);
+  const questions = await db.all('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position', [req.params.id]);
   questions.forEach(q => { try { q.options = JSON.parse(q.options); } catch { q.options = []; } });
   try { sub.answers = JSON.parse(sub.answers); } catch { sub.answers = []; }
   res.json({ sub, questions });
-});
+}));
 
-app.get('/api/evaluations/:id/results/csv', (req, res) => {
+app.get('/api/evaluations/:id/results/csv', ah(async (req, res) => {
   let userId;
   try {
     const token = req.query.token || (req.headers.authorization || '').replace('Bearer ','');
     const u = jwt.verify(token, JWT_SECRET);
     userId = u.id;
   } catch { return res.status(401).json({ error: 'No autorizado' }); }
-  const ev = db.prepare('SELECT * FROM evaluations WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+  const ev = await db.get('SELECT * FROM evaluations WHERE id = ? AND user_id = ?', [req.params.id, userId]);
   if (!ev) return res.status(404).json({ error: 'No encontrada' });
-  const submissions = db.prepare('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? ORDER BY submitted_at').all(req.params.id);
+  const submissions = await db.all('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? ORDER BY submitted_at', [req.params.id]);
 
   const rows = [['RUT','Nombre','Correctas','Total','% Logro','Nota','Tiempo (min)','Enviado']];
   submissions.forEach(s => {
@@ -656,12 +742,19 @@ app.get('/api/evaluations/:id/results/csv', (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="evaluacion-${ev.title.replace(/[^a-z0-9]/gi,'-')}.csv"`);
   res.send('﻿' + csv);
+}));
+
+// ─── Error handler (catches anything ah()/sh() forwarded) ─────────────────────
+app.use((err, req, res, next) => {
+  console.error('Request error:', err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Error interno del servidor' });
 });
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
 
-  socket.on('admin:join', ({ code, token }) => {
+  socket.on('admin:join', sh(async ({ code, token }) => {
     // Verify JWT and quiz ownership
     if (!token) return socket.emit('error', 'No autorizado');
     let user;
@@ -670,8 +763,8 @@ io.on('connection', (socket) => {
     const game = games[code];
     if (!game) return socket.emit('error', 'Sala no encontrada');
 
-    const quiz = db.prepare('SELECT user_id FROM quizzes WHERE id = ?').get(game.quizId);
-    const dbUser = db.prepare('SELECT role FROM users WHERE id = ?').get(user.id);
+    const quiz = await db.get('SELECT user_id FROM quizzes WHERE id = ?', [game.quizId]);
+    const dbUser = await db.get('SELECT role FROM users WHERE id = ?', [user.id]);
     if (quiz?.user_id !== user.id && dbUser?.role !== 'admin') {
       return socket.emit('error', 'No autorizado');
     }
@@ -684,9 +777,9 @@ io.on('connection', (socket) => {
       players: Object.values(game.players).map(p => ({ name: p.name, score: p.score })),
       currentQuestion: game.currentQuestion
     });
-  });
+  }));
 
-  socket.on('player:join', ({ code, name, emoji }) => {
+  socket.on('player:join', sh(async ({ code, name, emoji }) => {
     const game = games[code];
     if (!game) return socket.emit('error', 'Sala no encontrada');
     if (!name?.trim()) return socket.emit('error', 'Nombre requerido');
@@ -744,8 +837,8 @@ io.on('connection', (socket) => {
       teamMode: game.teamMode,
       teams: game.teamMode ? getTeamCounts(game) : []
     });
-    persistGame(code);
-  });
+    await persistGame(code);
+  }));
 
   socket.on('player:team', ({ teamId }) => {
     const code = socket.gameCode;
@@ -766,7 +859,7 @@ io.on('connection', (socket) => {
     io.to(`game:${code}`).emit('reaction:new', { emoji, playerName: player.name });
   });
 
-  socket.on('screen:join', ({ code }) => {
+  socket.on('screen:join', sh(async ({ code }) => {
     const game = games[code];
     if (!game) return socket.emit('error', 'Sala no encontrada');
     socket.join(`game:${code}`);
@@ -783,7 +876,7 @@ io.on('connection', (socket) => {
     };
 
     if (game.status === 'question' && game.currentQuestion >= 0) {
-      const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(game.quizId);
+      const questions = await db.all('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position', [game.quizId]);
       const q = questions[game.currentQuestion];
       if (q) {
         payload.currentQuestion = {
@@ -802,9 +895,9 @@ io.on('connection', (socket) => {
     }
 
     socket.emit('screen:state', payload);
-  });
+  }));
 
-  socket.on('admin:next', ({ token } = {}) => {
+  socket.on('admin:next', sh(async ({ token } = {}) => {
     const code = socket.gameCode;
     const game = games[code];
     if (!game) return;
@@ -812,14 +905,14 @@ io.on('connection', (socket) => {
       if (!token) return;
       try {
         const u = jwt.verify(token, JWT_SECRET);
-        const quiz = db.prepare('SELECT user_id FROM quizzes WHERE id = ?').get(game.quizId);
-        const dbUser = db.prepare('SELECT role FROM users WHERE id = ?').get(u.id);
+        const quiz = await db.get('SELECT user_id FROM quizzes WHERE id = ?', [game.quizId]);
+        const dbUser = await db.get('SELECT role FROM users WHERE id = ?', [u.id]);
         if (quiz?.user_id !== u.id && dbUser?.role !== 'admin') return;
       } catch { return; }
     }
     if (game.status === 'countdown' || game.status === 'question') return;
 
-    const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(game.quizId);
+    const questions = await db.all('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position', [game.quizId]);
     game.currentQuestion++;
 
     if (game.currentQuestion >= questions.length) {
@@ -837,12 +930,12 @@ io.on('connection', (socket) => {
       try {
         const scores = Object.values(game.players).map(p => p.score);
         const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-        db.prepare('INSERT INTO game_results (id, quiz_id, player_count, avg_score, question_tallies) VALUES (?, ?, ?, ?, ?)')
-          .run(uuidv4(), game.quizId, scores.length, avgScore, JSON.stringify(game.questionTallies));
+        await db.run('INSERT INTO game_results (id, quiz_id, player_count, avg_score, question_tallies) VALUES (?, ?, ?, ?, ?)',
+          [uuidv4(), game.quizId, scores.length, avgScore, JSON.stringify(game.questionTallies)]);
       } catch (e) { console.warn('Stats save error:', e.message); }
 
-      persistGame(code);
-      db.prepare(`DELETE FROM active_games WHERE code = ?`).run(code);
+      await persistGame(code);
+      await db.run(`DELETE FROM active_games WHERE code = ?`, [code]);
       return;
     }
 
@@ -886,9 +979,9 @@ io.on('connection', (socket) => {
 
       persistGame(code);
     }, 3000);
-  });
+  }));
 
-  socket.on('player:answer', ({ answerIndex }) => {
+  socket.on('player:answer', sh(async ({ answerIndex }) => {
     const code = socket.gameCode;
     const game = games[code];
     if (!game || game.status !== 'question') return;
@@ -960,9 +1053,9 @@ io.on('connection', (socket) => {
       clearInterval(game.questionTimer);
       revealAnswers(code, q);
     }
-  });
+  }));
 
-  socket.on('admin:reveal', ({ token } = {}) => {
+  socket.on('admin:reveal', sh(async ({ token } = {}) => {
     const code = socket.gameCode;
     const game = games[code];
     if (!game) return;
@@ -970,17 +1063,17 @@ io.on('connection', (socket) => {
       if (!token) return;
       try {
         const u = jwt.verify(token, JWT_SECRET);
-        const quiz = db.prepare('SELECT user_id FROM quizzes WHERE id = ?').get(game.quizId);
-        const dbUser = db.prepare('SELECT role FROM users WHERE id = ?').get(u.id);
+        const quiz = await db.get('SELECT user_id FROM quizzes WHERE id = ?', [game.quizId]);
+        const dbUser = await db.get('SELECT role FROM users WHERE id = ?', [u.id]);
         if (quiz?.user_id !== u.id && dbUser?.role !== 'admin') return;
       } catch { return; }
     }
     clearInterval(game.questionTimer);
-    const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position').all(game.quizId);
+    const questions = await db.all('SELECT * FROM questions WHERE quiz_id = ? ORDER BY position', [game.quizId]);
     const q = questions[game.currentQuestion];
     if (!q) return;
     revealAnswers(code, q);
-  });
+  }));
 
   socket.on('disconnect', () => {
     const code = socket.gameCode;
@@ -1014,7 +1107,7 @@ io.on('connection', (socket) => {
 
   // ─── Evaluation Socket Handlers ───────────────────────────────────────────────
 
-  socket.on('eval:join', ({ code, name, rut }) => {
+  socket.on('eval:join', sh(async ({ code, name, rut }) => {
     const cleanCode = String(code || '').trim().toUpperCase();
     const cleanName = String(name || '').trim().substring(0, 40);
     const cleanRut = String(rut || '').trim();
@@ -1024,13 +1117,13 @@ io.on('connection', (socket) => {
     const session = activeEvals[cleanCode];
     if (!session) return socket.emit('eval:error', 'Código inválido o evaluación no disponible');
 
-    const ev = db.prepare('SELECT * FROM evaluations WHERE id = ?').get(session.evalId);
+    const ev = await db.get('SELECT * FROM evaluations WHERE id = ?', [session.evalId]);
     if (!ev || ev.status !== 'open') return socket.emit('eval:error', 'La evaluación no está disponible');
 
-    const existing = db.prepare('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? AND student_rut = ?').get(session.evalId, cleanRut);
+    const existing = await db.get('SELECT * FROM evaluation_submissions WHERE evaluation_id = ? AND student_rut = ?', [session.evalId, cleanRut]);
     if (existing) return socket.emit('eval:error', 'Ya enviaste esta evaluación');
 
-    const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position').all(session.evalId);
+    const questions = await db.all('SELECT * FROM evaluation_questions WHERE evaluation_id = ? ORDER BY position', [session.evalId]);
     questions.forEach(q => { try { q.options = JSON.parse(q.options); } catch { q.options = []; } });
 
     // Fisher-Yates shuffle
@@ -1062,7 +1155,7 @@ io.on('connection', (socket) => {
     });
 
     io.to(`eval:admin:${cleanCode}`).emit('eval:progress', { students: _getEvalStudentList(session) });
-  });
+  }));
 
   socket.on('eval:answer', ({ questionId, answerIndex }) => {
     const code = socket.evalCode;
@@ -1076,15 +1169,15 @@ io.on('connection', (socket) => {
     io.to(`eval:admin:${code}`).emit('eval:progress', { students: _getEvalStudentList(activeEvals[code]) });
   });
 
-  socket.on('eval:submit', ({ answers }) => {
+  socket.on('eval:submit', sh(async ({ answers }) => {
     const code = socket.evalCode;
     if (!code || !activeEvals[code]) return;
     const session = activeEvals[code];
     const student = session.students[socket.id];
     if (!student || student.submitted) return;
 
-    const ev = db.prepare('SELECT * FROM evaluations WHERE id = ?').get(session.evalId);
-    const questions = db.prepare('SELECT * FROM evaluation_questions WHERE evaluation_id = ?').all(session.evalId);
+    const ev = await db.get('SELECT * FROM evaluations WHERE id = ?', [session.evalId]);
+    const questions = await db.all('SELECT * FROM evaluation_questions WHERE evaluation_id = ?', [session.evalId]);
 
     let correctCount = 0;
     const answersArr = Array.isArray(answers) ? answers : Object.entries(student.answers).map(([qId, aIdx]) => ({ questionId: qId, answerIndex: aIdx }));
@@ -1101,11 +1194,11 @@ io.on('connection', (socket) => {
     const questionOrder = answersArr.map(a => a.questionId);
     const submissionId = uuidv4();
 
-    db.prepare('INSERT INTO evaluation_submissions (id, evaluation_id, student_name, student_rut, answers, question_order, correct_count, total_count, grade, time_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    await db.run('INSERT INTO evaluation_submissions (id, evaluation_id, student_name, student_rut, answers, question_order, correct_count, total_count, grade, time_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
       submissionId, session.evalId, student.name, student.rut,
       JSON.stringify(answersArr), JSON.stringify(questionOrder),
       correctCount, totalCount, grade, timeUsed
-    );
+    ]);
 
     student.submitted = true;
     student.answered = Object.keys(student.answers).length;
@@ -1116,33 +1209,33 @@ io.on('connection', (socket) => {
 
     socket.emit('eval:result', { correctCount, totalCount, grade });
     io.to(`eval:admin:${code}`).emit('eval:progress', { students: _getEvalStudentList(session) });
-  });
+  }));
 
-  socket.on('eval:admin:watch', ({ code, token }) => {
-    if (!token) return;
-    try {
-      const u = jwt.verify(token, JWT_SECRET);
-      socket.join(`eval:admin:${code}`);
-      const session = activeEvals[code];
-      if (session) {
-        socket.emit('eval:progress', { students: _getEvalStudentList(session) });
-      }
-    } catch { return; }
-  });
-
-  socket.on('eval:close', ({ code, token }) => {
+  socket.on('eval:admin:watch', sh(async ({ code, token }) => {
     if (!token) return;
     try {
       jwt.verify(token, JWT_SECRET);
-      const session = activeEvals[code];
-      if (session) {
-        io.to(`eval:${code}`).emit('eval:timeout');
-        delete activeEvals[code];
-      }
-      db.prepare("UPDATE evaluations SET status='closed' WHERE code=?").run(code);
-      io.to(`eval:admin:${code}`).emit('eval:closed');
     } catch { return; }
-  });
+    socket.join(`eval:admin:${code}`);
+    const session = activeEvals[code];
+    if (session) {
+      socket.emit('eval:progress', { students: _getEvalStudentList(session) });
+    }
+  }));
+
+  socket.on('eval:close', sh(async ({ code, token }) => {
+    if (!token) return;
+    try {
+      jwt.verify(token, JWT_SECRET);
+    } catch { return; }
+    const session = activeEvals[code];
+    if (session) {
+      io.to(`eval:${code}`).emit('eval:timeout');
+      delete activeEvals[code];
+    }
+    await db.run("UPDATE evaluations SET status='closed' WHERE code=?", [code]);
+    io.to(`eval:admin:${code}`).emit('eval:closed');
+  }));
 });
 
 function _getEvalStudentList(session) {
@@ -1157,7 +1250,7 @@ function _getEvalStudentList(session) {
   }));
 }
 
-function revealAnswers(code, q) {
+async function revealAnswers(code, q) {
   const game = games[code];
   if (!game || game.status !== 'question') return;
   game.status = 'results';
@@ -1179,9 +1272,19 @@ function revealAnswers(code, q) {
   game.questionTallies[game.currentQuestion] = tally;
 
   io.to(`game:${code}`).emit('question:reveal', { correctIndex: q.correct_index, tally, ranking, teamMode: game.teamMode });
-  persistGame(code);
+  await persistGame(code);
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`Synapto backend running on port ${PORT}`));
+
+(async () => {
+  try {
+    await runMigrations();
+    await loadActiveGames();
+    server.listen(PORT, () => console.log(`Synapto backend running on port ${PORT}`));
+  } catch (e) {
+    console.error('FATAL: startup failed:', e);
+    process.exit(1);
+  }
+})();

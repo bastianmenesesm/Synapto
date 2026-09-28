@@ -14,7 +14,8 @@
     "qrcode": "^1.5.3",
     "uuid": "^9.0.0",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "@libsql/client": "^0.14.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

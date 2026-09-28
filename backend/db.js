@@ -1,71 +1,48 @@
-const { DatabaseSync } = require('node:sqlite');
-const path = require('path');
+const { createClient } = require('@libsql/client');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'synapto.db');
-const db = new DatabaseSync(DB_PATH);
+const url = process.env.TURSO_DATABASE_URL;
+const authToken = process.env.TURSO_AUTH_TOKEN;
 
-db.exec(`PRAGMA journal_mode = WAL`);
+if (!url) {
+  console.error('FATAL: TURSO_DATABASE_URL env var is not set');
+  process.exit(1);
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS quizzes (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+// Local fallback (e.g. `file:local.db`) doesn't need an authToken.
+const client = createClient(
+  authToken ? { url, authToken } : { url }
+);
 
-  CREATE TABLE IF NOT EXISTS questions (
-    id TEXT PRIMARY KEY,
-    quiz_id TEXT NOT NULL,
-    text TEXT NOT NULL,
-    options TEXT NOT NULL,
-    correct_index INTEGER NOT NULL,
-    time_limit INTEGER DEFAULT 20,
-    position INTEGER DEFAULT 0,
-    tag TEXT DEFAULT NULL,
-    FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
-  );
-`);
-try { db.prepare('ALTER TABLE questions ADD COLUMN tag TEXT DEFAULT NULL').run(); } catch {}
+/**
+ * Run one or more `;`-separated SQL statements with no return value expected.
+ * Mirrors the old `db.exec(sql)` from node:sqlite / better-sqlite3.
+ */
+async function exec(sql) {
+  const statements = sql
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const statement of statements) {
+    await client.execute(statement);
+  }
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS evaluations (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    time_limit INTEGER NOT NULL DEFAULT 90,
-    grade_min REAL DEFAULT 1.0,
-    grade_max REAL DEFAULT 7.0,
-    pass_percentage INTEGER DEFAULT 60,
-    status TEXT DEFAULT 'draft',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+/** INSERT/UPDATE/DELETE. Mirrors `db.prepare(sql).run(...params)`. */
+async function run(sql, params = []) {
+  const result = await client.execute({ sql, args: params });
+  return { lastInsertRowid: result.lastInsertRowid, changes: result.rowsAffected };
+}
 
-  CREATE TABLE IF NOT EXISTS evaluation_questions (
-    id TEXT PRIMARY KEY,
-    evaluation_id TEXT NOT NULL,
-    text TEXT NOT NULL,
-    options TEXT NOT NULL,
-    correct_index INTEGER NOT NULL,
-    position INTEGER DEFAULT 0,
-    tag TEXT DEFAULT NULL,
-    FOREIGN KEY (evaluation_id) REFERENCES evaluations(id)
-  );
+/** SELECT a single row. Mirrors `db.prepare(sql).get(...params)`. */
+async function get(sql, params = []) {
+  const result = await client.execute({ sql, args: params });
+  return result.rows[0];
+}
 
-  CREATE TABLE IF NOT EXISTS evaluation_submissions (
-    id TEXT PRIMARY KEY,
-    evaluation_id TEXT NOT NULL,
-    student_name TEXT NOT NULL,
-    student_rut TEXT NOT NULL,
-    answers TEXT NOT NULL DEFAULT '[]',
-    question_order TEXT NOT NULL DEFAULT '[]',
-    correct_count INTEGER DEFAULT 0,
-    total_count INTEGER DEFAULT 0,
-    grade REAL DEFAULT NULL,
-    submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    time_used INTEGER DEFAULT 0
-  );
-`);
+/** SELECT multiple rows. Mirrors `db.prepare(sql).all(...params)`. */
+async function all(sql, params = []) {
+  const result = await client.execute({ sql, args: params });
+  return result.rows;
+}
 
-try { db.prepare('ALTER TABLE evaluations ADD COLUMN tags TEXT DEFAULT NULL').run(); } catch {}
-
-module.exports = db;
+module.exports = { exec, run, get, all, client };
